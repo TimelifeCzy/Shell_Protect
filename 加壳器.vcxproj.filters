@@ -1,0 +1,159 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="头文件">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;hm;inl;inc;xsd</Extensions>
+    </Filter>
+    <Filter Include="资源文件">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="Public PEInfo">
+      <UniqueIdentifier>{231e37dc-b5fe-42d4-9338-0e678c40a7e6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Section Info">
+      <UniqueIdentifier>{ba8cf3bb-b50b-4c82-8198-a96661100717}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Add Section">
+      <UniqueIdentifier>{1104ce56-3f92-4b5e-bf9a-11ba81701fdc}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="studData">
+      <UniqueIdentifier>{022210bd-fb0b-421e-84a7-20194b85764c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="HASH">
+      <UniqueIdentifier>{2597ef00-5386-43c5-b9b3-e874f9469911}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="lzCompression">
+      <UniqueIdentifier>{f8b89e98-619f-450b-ae0e-4c87e6a5352d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="UnShell">
+      <UniqueIdentifier>{65173fc3-a050-4d5b-a942-e48a8debb6e9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="VM">
+      <UniqueIdentifier>{56c09944-a7bd-4698-ac3c-bcaaf87e4e40}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Compression Data VMencode">
+      <UniqueIdentifier>{534e4f3e-c769-436e-a6f2-ea8cefde703e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="capstone">
+      <UniqueIdentifier>{022d0ab7-eb9e-44fd-af4e-d6e5822c83ee}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Main">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="AddSection.h">
+      <Filter>Add Section</Filter>
+    </ClInclude>
+    <ClInclude Include="ProgramEntrance.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="resource.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="stdafx.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="MasterWindows.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="puPEinfoData.h">
+      <Filter>Public PEInfo</Filter>
+    </ClInclude>
+    <ClInclude Include="SectionInfo.h">
+      <Filter>Section Info</Filter>
+    </ClInclude>
+    <ClInclude Include="CompressionData.h">
+      <Filter>Compression Data VMencode</Filter>
+    </ClInclude>
+    <ClInclude Include="studData.h">
+      <Filter>studData</Filter>
+    </ClInclude>
+    <ClInclude Include="HashOfFunction.h">
+      <Filter>HASH</Filter>
+    </ClInclude>
+    <ClInclude Include="UnShell.h">
+      <Filter>UnShell</Filter>
+    </ClInclude>
+    <ClInclude Include="lz4\include\lz4.h">
+      <Filter>lzCompression</Filter>
+    </ClInclude>
+    <ClInclude Include="quick\quicklz.h">
+      <Filter>lzCompression</Filter>
+    </ClInclude>
+    <ClInclude Include="vm.h">
+      <Filter>VM</Filter>
+    </ClInclude>
+    <ClInclude Include="Capstone.h">
+      <Filter>capstone</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="AddSection.cpp">
+      <Filter>Add Section</Filter>
+    </ClCompile>
+    <ClCompile Include="ProgramEntrance.cpp">
+      <Filter>Main</Filter>
+    </ClCompile>
+    <ClCompile Include="MasterWindows.cpp">
+      <Filter>Main</Filter>
+    </ClCompile>
+    <ClCompile Include="puPEinfoData.cpp">
+      <Filter>Public PEInfo</Filter>
+    </ClCompile>
+    <ClCompile Include="SectionInfo.cpp">
+      <Filter>Section Info</Filter>
+    </ClCompile>
+    <ClCompile Include="CompressionData.cpp">
+      <Filter>Compression Data VMencode</Filter>
+    </ClCompile>
+    <ClCompile Include="studData.cpp">
+      <Filter>studData</Filter>
+    </ClCompile>
+    <ClCompile Include="HashOfFunction.cpp">
+      <Filter>HASH</Filter>
+    </ClCompile>
+    <ClCompile Include="UnShell.cpp">
+      <Filter>UnShell</Filter>
+    </ClCompile>
+    <ClCompile Include="lz4\include\lz4.c">
+      <Filter>lzCompression</Filter>
+    </ClCompile>
+    <ClCompile Include="quick\quicklz.c">
+      <Filter>lzCompression</Filter>
+    </ClCompile>
+    <ClCompile Include="vm.cpp">
+      <Filter>VM</Filter>
+    </ClCompile>
+    <ClCompile Include="Capstone.cpp">
+      <Filter>capstone</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="加壳器.rc">
+      <Filter>资源文件</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="图片资源管理\3.bmp">
+      <Filter>资源文件</Filter>
+    </Image>
+    <Image Include="图片资源管理\Panda_48.ico">
+      <Filter>资源文件</Filter>
+    </Image>
+    <Image Include="图片资源管理\bitmap2.bmp">
+      <Filter>资源文件</Filter>
+    </Image>
+    <Image Include="图片资源管理\protect.bmp">
+      <Filter>资源文件</Filter>
+    </Image>
+  </ItemGroup>
+  <ItemGroup>
+    <MASM Include="x64.asm">
+      <Filter>Main</Filter>
+    </MASM>
+  </ItemGroup>
+</Project>
