@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 15
-VisualStudioVersion = 15.0.28307.1209
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.32106.194
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "加壳器", "加壳器.vcxproj", "{03AEDF10-24E0-420D-AD89-B186018CCE0E}"
 	ProjectSection(ProjectDependencies) = postProject
@@ -9,10 +9,6 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "加壳器", "加壳器.vcxp
 	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Stud", "Stud\Stud.vcxproj", "{024643EC-3FA7-4018-8E84-D5D2A9C4E878}"
-EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "hash_asmtest", "F:\Anti-RootKit\hash_asmtest\hash_asmtest.vcxproj", "{7F18B2D7-D1FC-4F42-949F-1CF188C6E8E9}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WpfApp1", "C:\Users\Administrator\source\repos\WpfApp1\WpfApp1.csproj", "{B17ADAC1-30C1-4592-AE3F-62A44EEAFBD7}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -44,27 +40,6 @@ Global
 		{024643EC-3FA7-4018-8E84-D5D2A9C4E878}.Release|Win32.Build.0 = Release|Win32
 		{024643EC-3FA7-4018-8E84-D5D2A9C4E878}.Release|x64.ActiveCfg = Release|x64
 		{024643EC-3FA7-4018-8E84-D5D2A9C4E878}.Release|x64.Build.0 = Release|x64
-		{7F18B2D7-D1FC-4F42-949F-1CF188C6E8E9}.Debug|Any CPU.ActiveCfg = Debug|Win32
-		{7F18B2D7-D1FC-4F42-949F-1CF188C6E8E9}.Debug|Win32.ActiveCfg = Debug|Win32
-		{7F18B2D7-D1FC-4F42-949F-1CF188C6E8E9}.Debug|Win32.Build.0 = Debug|Win32
-		{7F18B2D7-D1FC-4F42-949F-1CF188C6E8E9}.Debug|x64.ActiveCfg = Debug|x64
-		{7F18B2D7-D1FC-4F42-949F-1CF188C6E8E9}.Release|Any CPU.ActiveCfg = Release|Win32
-		{7F18B2D7-D1FC-4F42-949F-1CF188C6E8E9}.Release|Win32.ActiveCfg = Release|Win32
-		{7F18B2D7-D1FC-4F42-949F-1CF188C6E8E9}.Release|Win32.Build.0 = Release|Win32
-		{7F18B2D7-D1FC-4F42-949F-1CF188C6E8E9}.Release|x64.ActiveCfg = Release|x64
-		{7F18B2D7-D1FC-4F42-949F-1CF188C6E8E9}.Release|x64.Build.0 = Release|x64
-		{B17ADAC1-30C1-4592-AE3F-62A44EEAFBD7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{B17ADAC1-30C1-4592-AE3F-62A44EEAFBD7}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{B17ADAC1-30C1-4592-AE3F-62A44EEAFBD7}.Debug|Win32.ActiveCfg = Debug|Any CPU
-		{B17ADAC1-30C1-4592-AE3F-62A44EEAFBD7}.Debug|Win32.Build.0 = Debug|Any CPU
-		{B17ADAC1-30C1-4592-AE3F-62A44EEAFBD7}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{B17ADAC1-30C1-4592-AE3F-62A44EEAFBD7}.Debug|x64.Build.0 = Debug|Any CPU
-		{B17ADAC1-30C1-4592-AE3F-62A44EEAFBD7}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{B17ADAC1-30C1-4592-AE3F-62A44EEAFBD7}.Release|Any CPU.Build.0 = Release|Any CPU
-		{B17ADAC1-30C1-4592-AE3F-62A44EEAFBD7}.Release|Win32.ActiveCfg = Release|Any CPU
-		{B17ADAC1-30C1-4592-AE3F-62A44EEAFBD7}.Release|Win32.Build.0 = Release|Any CPU
-		{B17ADAC1-30C1-4592-AE3F-62A44EEAFBD7}.Release|x64.ActiveCfg = Release|Any CPU
-		{B17ADAC1-30C1-4592-AE3F-62A44EEAFBD7}.Release|x64.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
