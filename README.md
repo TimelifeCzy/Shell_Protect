@@ -40,3 +40,8 @@ PE虚拟壳框架，项目意图给学习软件保护加壳的初学者提供一
 ![image](https://github.com/TimelifeCzy/Shell_Protect/blob/main/readmepng/6.png)
 
 项目仅用于学习，请大家重视。
+
+## Stargazers over time
+
+[![Stargazers over time](https://starchart.cc/TimelifeCzy/Shell_Protect.svg)](https://starchart.cc/TimelifeCzy/Shell_Protect)
+
