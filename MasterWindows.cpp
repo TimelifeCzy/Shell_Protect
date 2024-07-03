@@ -1,6 +1,4 @@
-﻿// MasterWindows.cpp :
-//
-
+﻿// MasterWindows.cpp 
 #include "stdafx.h"
 #include "MasterWindows.h"
 #include "afxdialogex.h"
@@ -109,18 +107,17 @@ void MasterWindows::OnBnClickedButton1()
 	tmep = tmep.Right(m);
 
 	DWORD dwNum = 0;
+	RtlSecureZeroMemory(g_filenameonly, 0);
 	dwNum = WideCharToMultiByte(CP_OEMCP, NULL, tmep, -1, NULL, NULL, 0, NULL);
 	WideCharToMultiByte(CP_OEMCP, NULL, tmep, -1, g_filenameonly, dwNum, 0, NULL);
 
-	if (g_filenameonly)
+	if (strlen(g_filenameonly) > 0)
 		strcat(g_filenameonly, "_FileData.txt");
 	else
 	{
 		strcpy(g_filenameonly, "FileData.txt");
 		AfxMessageBox(L"转换文件名有问题");
 	}
-
-	
 	obj_Peinfo.puOpenFileLoad(m_MasterStaticTextStr);
 
 	// 2. 压缩全部区段 压缩的时候不清空数据目录表以及区段大小（不压缩新增区段）
@@ -131,8 +128,11 @@ void MasterWindows::OnBnClickedButton1()
 	obj_Peinfo.puOpenFileLoad(m_MasterStaticTextStr);
 
 
-	if (!obj_ComperData.puCompressSection())
+	if (!obj_ComperData.puCompressSection()) {
 		AfxMessageBox(L"CompressSection failuer!");
+		return;
+	}
+
 
 	CloseHandle(obj_Peinfo.puFileHandle());
 
@@ -271,23 +271,32 @@ void MasterWindows::OnBnClickedButton9()
 
 BOOL MasterWindows::NewSection()
 {
-	AddSection obj_addsection; BOOL nRet = TRUE;
-	
+	BOOL nRet = TRUE;
 	BYTE Name[] = ".VMP";
-	
-	// 遗留问题，添加区段必须提前申请大小，所以拷贝Stub崩溃排查此处大小，这里是Stud-DLL大小
-	const DWORD SectionSize = 0x19600;
-	
+	AddSection obj_addsection; 
+
+	// 添加区段提前申请Stub大小
+	DWORD SectionSize = 0;
+	std::string sDriectory = "";
+	CodeTool::CGetCurrentDirectory(sDriectory);
+	if (!sDriectory.empty()) {
+		const std::string sStuFile = (sDriectory + "Stud.dll").c_str();
+		const HANDLE hFile = CreateFileA(sStuFile.c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
+			NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+		if (hFile) {
+			SectionSize = GetFileSize(hFile, &SectionSize);
+			CloseHandle(hFile);
+		}
+		if (SectionSize <= 0)
+			return false;
+	}
+	else
+		return false;
 	obj_addsection.puModifySectioNumber();
-
 	nRet = obj_addsection.puModifySectionInfo(Name, SectionSize);
-
 	obj_addsection.puModifyProgramEntryPoint();
-
 	obj_addsection.puModifySizeofImage();
-
 	nRet = obj_addsection.puAddNewSectionByData(SectionSize);
-
 	return nRet;
 }
 
@@ -325,14 +334,17 @@ void MasterWindows::OnBnClickedButton2()
 	}
 
 	// 判断是否我们的壳，否则不给脱壳
-
 	UnShllerProcPath = m_MasterStaticTextStr;
 
 	UnShell obj_Unshell;
-
-	obj_Unshell.puRepCompressionData();
-
-	obj_Unshell.puDeleteSectionInfo();
+	if (!obj_Unshell.puRepCompressionData()) {
+		AfxMessageBox(L"puRepCompressionData error.");
+		return;
+	}
+	if(!obj_Unshell.puDeleteSectionInfo()) {
+		AfxMessageBox(L"puDeleteSectionInfo error.");
+		return;
+	}
 
 	if (obj_Unshell.puSaveUnShell())
 	{
@@ -344,8 +356,6 @@ void MasterWindows::OnBnClickedButton2()
 		}
 		AfxMessageBox(L"puSaveUnShell_Success");
 	}
-
-
 }
 
 HBRUSH MasterWindows::OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor)

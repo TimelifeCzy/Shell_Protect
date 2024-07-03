@@ -54,6 +54,8 @@ void CompressionData::VmcodeEntry(char* TargetCode, _Out_ int &CodeLength)
 	PuPEInfo obj_pePe; DWORD64 Offset = 0;
 	// 获取VM的起始地址
 	DWORD64 Vmencodeaddr = (DWORD64)GetProcAddress((HMODULE)m_studBase, "main");
+	if (!Vmencodeaddr)
+		return;
 	PIMAGE_SECTION_HEADER studSection = obj_pePe.puGetSectionAddress((char *)m_studBase, (BYTE *)".text");
 	PIMAGE_SECTION_HEADER SurceBase = obj_pePe.puGetSectionAddress((char *)m_lpBase, (BYTE *)".VMP");
 	PIMAGE_NT_HEADERS pNt = (PIMAGE_NT_HEADERS)obj_pePe.puGetNtHeadre();
@@ -115,7 +117,8 @@ BOOL CompressionData::CompressSectionData()
 	// 注意修复-改为程序Name_FileData.txt
 	if ((fpFile = fopen(g_filenameonly, "wb+")) == NULL)
 	{
-		AfxMessageBox(L"文件创建失败");
+		AfxMessageBox(L"文件创建失败.");
+		return 0;
 	}
 
 	//if ((fpVmFile = fopen("VmCodeList.txt", "wb+")) == NULL)
@@ -128,11 +131,18 @@ BOOL CompressionData::CompressSectionData()
 #else
 	m_studBase = LoadLibraryEx(L"Stud.dll", NULL, DONT_RESOLVE_DLL_REFERENCES);
 #endif
+	if (!m_studBase || (nullptr == m_studBase)) {
+		AfxMessageBox(L"Stud.dll加载失败.");
+		return 0;
+	}
+
 	g_stu = (_Stud*)GetProcAddress((HMODULE)m_studBase, "g_stud");
-
 	g_Vm = (VmNode*)GetProcAddress((HMODULE)m_studBase, "g_VmNode");
-
 	g_dataHlpers = (char *)GetProcAddress((HMODULE)m_studBase, "g_dataHlper");// g_dataHlper
+	if (!g_stu || (!g_Vm) || (!g_dataHlpers)) {
+		AfxMessageBox(L"Stud.dll GetProcAddress 失败.");
+		return 0;
+	}
 
 	g_stu->s_OneSectionSizeofData = FALSE;
 

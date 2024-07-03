@@ -149,18 +149,25 @@ BOOL AddSection::ModifySizeofImage()
 BOOL AddSection::AddNewSectionByteData(const DWORD & size)
 {
 	newlpBase = (char *)malloc(FileSize + size);
+	if (!newlpBase || (nullptr == newlpBase))
+		return false;
+
 	memset(newlpBase, 0, (FileSize + size));
-	memcpy(newlpBase, pFileBaseData, FileSize);
-	free(pFileBaseData);
+	if (pFileBaseData) {
+		memcpy(newlpBase, pFileBaseData, FileSize);
+		free(pFileBaseData);
+	}
+	else
+		return false;
 
 	DWORD dWriteSize = 0; OVERLAPPED OverLapped = { 0 };
-
 	int nRetCode = WriteFile(FileHandle, newlpBase, (FileSize + size), &dWriteSize, &OverLapped);
-
-	free(newlpBase);
-
-	if (dWriteSize == 0){ AfxMessageBox(L"CreateSection WriteFIle faliuer"); return FALSE; }
-
+	if (newlpBase)
+		free(newlpBase);
+	if (dWriteSize == 0){ 
+		AfxMessageBox(L"CreateSection WriteFIle faliuer"); 
+		return FALSE; 
+	}
 	return TRUE;
 }
 

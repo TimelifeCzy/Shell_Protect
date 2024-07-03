@@ -1,19 +1,17 @@
-#include "stud.h"
-#include <stdio.h>
+#include "pch.h"
+#include <corecrt_wstdio.h>
 #include "../lz4/include/lz4.h"
 #include "../quick/quicklz.h"
-#include <CommCtrl.h>
+#include "CombatShell.h"
 
-// #include "../capstone/include/capstone/capstone.h"
-//#ifdef _WIN64 // 64位平台编译器会自动定义这个宏
-//#pragma comment(lib,"..\\capstone\\64\\capstone.lib")
-//#else
-//#pragma comment(lib,"..\\capstone\\32\\capstone.lib")
-//#endif
+#include <stdio.h>
+#include <CommCtrl.h>
 
 #pragma comment(linker, "/merge:.data=.text")
 #pragma comment(linker, "/merge:.rdata=.text")
 #pragma comment(linker, "/section:.text,RWE")
+
+HINSTANCE g_hInstance = nullptr;
 
 // IAT encode Key
 #define XORKEY 0x13973575
@@ -25,527 +23,331 @@ DWORD64 m_Dlllpbase = 0x140000000;
 DWORD m_Dlllpbase = 0x400000;
 #endif
 
-// export gloable struct
+/*
+* export gloable struct
+	g_dataHlper: 保存加壳时候的数据, 需要根据加密的大小来申请
+*/
+#define DllExport __declspec( dllexport )
 extern "C" {
-	__declspec(dllexport) Stud g_stud = { 0 };
-	__declspec(dllexport) VmNode g_VmNode = { 0, };
-	// 保存加壳时候的数据,需要根据加密的大小来申请
-	__declspec(dllexport) char g_dataHlper[0x2048];
-}
-
-static TCHAR szWindowClass[] = TEXT("ZhuDongFangYu");
-
-HINSTANCE g_hInstance;
-
-typedef void* (WINAPI*FnGetProcAddress)(HMODULE, const char*);
-FnGetProcAddress MyGetProcAddress;
-
-typedef HMODULE(WINAPI* FnLoadLibraryExA)(_In_ LPCSTR lpLibFileName, _Reserved_ HANDLE hFile, _In_ DWORD dwFlags);
-FnLoadLibraryExA MyLoadLibraryExA;
-
-typedef HMODULE(WINAPI* FnGetModuleHandleW)(_In_opt_ LPCWSTR lpModuleName);
-FnGetModuleHandleW MyGetModuleHandleW;
-
-typedef HBRUSH(WINAPI* FnCreateSolidBrush)(_In_ COLORREF color);
-FnCreateSolidBrush MyCreateSolidBrush;
-
-typedef ATOM(WINAPI* FnRegisterClassW)(_In_ CONST WNDCLASSW *lpWndClass);
-FnRegisterClassW MyRegisterClassW;
-
-typedef WINUSERAPI ATOM(WINAPI* FnRegisterClassExW)(_In_ CONST WNDCLASSEXW *);
-FnRegisterClassExW MyRegisterClassExW;
-
-typedef VOID*(WINAPIV* Fnmalloc)(_In_ _CRT_GUARDOVERFLOW size_t _Size);
-Fnmalloc Mymalloc;
-
-typedef	WINUSERAPI HWND(WINAPI* FnCreateWindowExW)(
-	_In_ DWORD dwExStyle,
-	_In_opt_ LPCWSTR lpClassName,
-	_In_opt_ LPCWSTR lpWindowName,
-	_In_ DWORD dwStyle,
-	_In_ int X,
-	_In_ int Y,
-	_In_ int nWidth,
-	_In_ int nHeight,
-	_In_opt_ HWND hWndParent,
-	_In_opt_ HMENU hMenu,
-	_In_opt_ HINSTANCE hInstance,
-	_In_opt_ LPVOID lpParam);
-FnCreateWindowExW MyCreateWindowExW;
-
-typedef BOOL(WINAPI* FnShowWindow)(_In_ HWND hWnd, _In_ int nCmdShow);
-FnShowWindow MyShowWindow;
-
-typedef BOOL(WINAPI* FnUpdateWindow)(_In_ HWND hWnd);
-FnUpdateWindow MyUpdateWindow;
-
-typedef BOOL(WINAPI* FnGetMessageW)(_Out_ LPMSG lpMsg, _In_opt_ HWND hWnd, _In_ UINT wMsgFilterMin, _In_ UINT wMsgFilterMax);
-FnGetMessageW MyGetMessageW;
-
-typedef BOOL(WINAPI* FnTranslateMessage)(_In_ CONST MSG *lpMsg);
-FnTranslateMessage	MyTranslateMessage;
-
-typedef LRESULT(WINAPI* FnDispatchMessageW)(_In_ CONST MSG *lpMsg);
-FnDispatchMessageW MyDispatchMessageW;
-
-typedef int (WINAPI* FnGetWindowTextW)(_In_ HWND hWnd, _Out_writes_(nMaxCount) LPWSTR lpString, _In_ int nMaxCount);
-FnGetWindowTextW MyGetWindowTextW;
-
-typedef int (WINAPI* FnlstrcmpW)(_In_ LPCWSTR lpString1, _In_ LPCWSTR lpString2);
-FnlstrcmpW MylstrcmpW;
-
-typedef int (WINAPI* FnMessageBoxA)(_In_opt_ HWND hWnd, _In_opt_ LPCSTR lpText, _In_opt_ LPCSTR lpCaption, _In_ UINT uType);
-FnMessageBoxA MyMessageBoxA;
-
-typedef VOID(WINAPI* FnPostQuitMessage)(_In_ int nExitCode);
-FnPostQuitMessage MyPostQuitMessage;
-
-typedef LRESULT(WINAPI* FnDefWindowProcW)(_In_ HWND hWnd, _In_ UINT Msg, _In_ WPARAM wParam, _In_ LPARAM lParam);
-FnDefWindowProcW MyDefWindowProcW;
-
-typedef LRESULT(WINAPI* FnDefWindowProcA)(_In_ HWND hWnd, _In_ UINT Msg, _In_ WPARAM wParam, _In_ LPARAM lParam);
-FnDefWindowProcW MyDefWindowProcA;
-
-typedef HCURSOR(WINAPI* FnLoadCursorW)(_In_opt_ HINSTANCE hInstance, _In_ LPCWSTR lpCursorName);
-FnLoadCursorW MyLoadCursorW;
-
-typedef HICON(WINAPI* FnLoadIconW)(_In_opt_ HINSTANCE hInstance, _In_ LPCWSTR lpIconName);
-FnLoadIconW MyLoadIconW;
-
-typedef VOID(WINAPI* FnExitProcess)(_In_ UINT uExitCode);
-FnExitProcess MyExitProcess;
-
-typedef HWND(WINAPI* FnGetDlgItem)(_In_opt_ HWND hDlg, _In_ int nIDDlgItem);
-FnGetDlgItem MyGetDlgItem;
-
-typedef BOOL(WINAPI* FnVirtualProtect)(_In_ LPVOID lpAddress, _In_ SIZE_T dwSize, _In_ DWORD flNewProtect, _Out_ PDWORD lpflOldProtect);
-FnVirtualProtect MyVirtualProtect;
-
-typedef
-BOOL
-(WINAPI*
-	FnVirtualFree)(
-		_Pre_notnull_ _When_(dwFreeType == MEM_DECOMMIT, _Post_invalid_) _When_(dwFreeType == MEM_RELEASE, _Post_ptr_invalid_) LPVOID lpAddress,
-		_In_ SIZE_T dwSize,
-		_In_ DWORD dwFreeType
-		);
-FnVirtualFree MyVirtualFree;
-
-typedef HWND(WINAPI* FnFindWindowExW)(_In_opt_ HWND hWndParent, _In_opt_ HWND hWndChildAfter, _In_opt_ LPCWSTR lpszClass, _In_opt_ LPCWSTR lpszWindow);
-FnFindWindowExW MyFindWindowExW;
-
-typedef LRESULT(WINAPI* FnSendMessageW)(
-	_In_ HWND hWnd,
-	_In_ UINT Msg,
-	_Pre_maybenull_ _Post_valid_ WPARAM wParam,
-	_Pre_maybenull_ _Post_valid_ LPARAM lParam
-	);
-FnSendMessageW MySendMessageW;
-
-typedef HANDLE(WINAPI* FnCreateThread)(
-	_In_opt_ LPSECURITY_ATTRIBUTES lpThreadAttributes,
-	_In_ SIZE_T dwStackSize,
-	_In_ LPTHREAD_START_ROUTINE lpStartAddress,
-	_In_opt_ __drv_aliasesMem LPVOID lpParameter,
-	_In_ DWORD dwCreationFlags,
-	_Out_opt_ LPDWORD lpThreadId
-	);
-FnCreateThread MyCreateThread;
-
-typedef VOID(WINAPI* FnSleep)(
-	_In_ DWORD dwMilliseconds
-	);
-FnSleep MySleep;
-
-typedef LPVOID
-(WINAPI* FnVirtualAlloc)(
-	_In_opt_ LPVOID lpAddress,
-	_In_     SIZE_T dwSize,
-	_In_     DWORD flAllocationType,
-	_In_     DWORD flProtect
-	);
-FnVirtualAlloc MyVirtualAlloc;
-
-typedef int (WINAPI* FnGetDlgCtrlID)(
-	_In_ HWND hWnd
-	);
-FnGetDlgCtrlID MyGetDlgCtrlID;
-
-typedef HWND(WINAPI* FnFindWindowW)(
-	_In_opt_ LPCWSTR lpClassName,
-	_In_opt_ LPCWSTR lpWindowName
-	);
-FnFindWindowW MyFindWindowW;
-
-typedef BOOL(WINAPI* FnPostMessage) (
-	HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam
-	);
-FnPostMessage MyPostMessageW;
-
-typedef WINBASEAPI
-_Check_return_
-_Post_equals_last_error_
-DWORD
-(WINAPI* FnGetLastError)(
-	VOID
-	);
-FnGetLastError MyGetLastError;
-
-typedef _ACRTIMP FILE* (__cdecl* Fnfopen)(
-	_In_z_ char const* _FileName,
-	_In_z_ char const* _Mode
-	);
-Fnfopen Myfopen;
-
-typedef _ACRTIMP size_t(__cdecl* Fnfread)(
-	_Out_writes_bytes_(_ElementSize * _ElementCount) void*  _Buffer,
-	_In_                                             size_t _ElementSize,
-	_In_                                             size_t _ElementCount,
-	_Inout_                                          FILE*  _Stream
-	);
-Fnfread Myfread;
-
-typedef _ACRTIMP _CRT_HYBRIDPATCHABLE
-void(__cdecl* Fnfree)(
-	_Pre_maybenull_ _Post_invalid_ void* _Block
-	);
-Fnfree Myfree;
-
-typedef void* (__cdecl* Fnmemset)(
-	_Out_writes_bytes_all_(_Size) void*  _Dst,
-	_In_                          int    _Val,
-	_In_                          size_t _Size
-	);
-Fnmemset Mymemset;
-
-typedef void* (__cdecl* Fnmemcpy)(
-	_Out_writes_bytes_all_(_Size) void* _Dst,
-	_In_reads_bytes_(_Size)       void const* _Src,
-	_In_                          size_t      _Size
-	);
-Fnmemcpy Mymemcpy;
-
-typedef _VCRTIMP void* (__cdecl* Fnmemmove)(
-	_Out_writes_bytes_all_opt_(_Size) void*       _Dst,
-	_In_reads_bytes_opt_(_Size)       void const* _Src,
-	_In_                              size_t      _Size
-	);
-Fnmemmove Mymemmove;
-
-typedef _ACRTIMP int(__cdecl* FnMy_stricmp)(
-	_In_z_ char const* _String1,
-	_In_z_ char const* _String2
-	);
-FnMy_stricmp My_stricmp;
-
-typedef _ACRTIMP int(__cdecl* Fn_strnicmp)(
-	_In_reads_or_z_(_MaxCount) char const* _String1,
-	_In_reads_or_z_(_MaxCount) char const* _String2,
-	_In_                       size_t      _MaxCount
-	);
-Fn_strnicmp My_strnicmp;//38C92E5F
-
+	DllExport Stud g_stud = { 0, };
+	DllExport VmNode g_VmNode = { 0, };
+	DllExport char g_dataHlper[0x2048] = { 0, };
+	DllExport void WINAPI main();
 #ifdef _WIN64
-extern "C" {
-	//==============================================================================
-	//    x32:fs  x64:gs  Load dll Module and Get API Address
-	//==============================================================================
-	void __stdcall puGetModule(const DWORD Hash, DWORD64* address);
-	PVOID64 __stdcall puGetProcAddress(const DWORD64 modules, DWORD Hash);
-	void __stdcall CodeExecEntry(DWORD64 oep);
-	//==============================================================================
-	//    VmCode Exec Handler
-	//==============================================================================
-	void __stdcall VmSub_RSPHandle(unsigned char* opcode, unsigned __int64 addr);	// 48:83EC + imm立即数
-
-	void __stdcall VmLea_RDXHandle(unsigned char* opcode, unsigned __int64 addr, unsigned __int64 regaddr);	// 48:8D15 6DD10000
-	void __stdcall VmLea_RCXHandle(unsigned char* opcode, unsigned __int64 addr, unsigned __int64 regaddr);	// 48:8D15 6DD10000
-
-	void __stdcall VmMov_RCXHandle(unsigned char* opcode, unsigned __int64 addr, unsigned __int64 regaddr);	// B9 18428C22
-	void __stdcall VmMov_EDXHandle(unsigned char* opcode, unsigned __int64 addr, unsigned __int64 regaddr);
-	void __stdcall VmMov_ECXHandle(unsigned char* opcode, unsigned __int64 addr, unsigned __int64 regaddr);
-	void __stdcall VmMov_MemHandle(unsigned char* opcode, unsigned __int64 addr, unsigned __int64 regaddr);
-
-
-	void __stdcall VmXor_r8dHandle(unsigned char* opcode, unsigned __int64 regaddr);
-	void __stdcall VmXor_EcxHandle(unsigned char* opcode, unsigned __int64 regaddr);
-	void __stdcall VmXor_EdxHandle(unsigned char* opcode, unsigned __int64 regaddr);
-
-	void __stdcall VmCallE8_Handle(unsigned char* opcode, unsigned __int64 addr, unsigned __int64 regaddr, unsigned __int64 retrax);
-	void __stdcall VmCallFF15_Handle(unsigned char* opcode, unsigned __int64 addr, unsigned __int64 regaddr, unsigned __int64 retrax);
-
-	void __stdcall VmAdd_RspHandle(unsigned char* opcode, unsigned __int64 regaddr);
-	void __stdcall VmRet_Handle(unsigned char* opcode, unsigned __int64 addr);
+	DllExport void WINAPI vmentry();
+#endif
 }
-#else
+
+Fn_strnicmp My_strnicmp = nullptr; //38C92E5F
+FnMy_stricmp My_stricmp = nullptr;
+Fnmemmove Mymemmove = nullptr;
+Fnmemcpy Mymemcpy = nullptr;
+Fnmemset Mymemset = nullptr;
+Fnfree Myfree = nullptr;
+Fnfread Myfread = nullptr;
+Fnfopen Myfopen = nullptr;
+FnGetLastError MyGetLastError = nullptr;
+FnPostMessage MyPostMessageW = nullptr;
+FnFindWindowW MyFindWindowW = nullptr;
+FnGetDlgCtrlID MyGetDlgCtrlID = nullptr;
+FnVirtualAlloc MyVirtualAlloc = nullptr;
+FnSleep MySleep = nullptr;
+FnCreateThread MyCreateThread = nullptr;
+FnSendMessageW MySendMessageW = nullptr;
+FnFindWindowExW MyFindWindowExW = nullptr;
+FnVirtualFree MyVirtualFree = nullptr;
+FnVirtualProtect MyVirtualProtect = nullptr;
+FnGetDlgItem MyGetDlgItem = nullptr;
+FnExitProcess MyExitProcess = nullptr;
+FnLoadIconW MyLoadIconW = nullptr;
+FnLoadCursorW MyLoadCursorW = nullptr;
+FnDefWindowProcW MyDefWindowProcA = nullptr;
+FnDefWindowProcW MyDefWindowProcW = nullptr;
+FnPostQuitMessage MyPostQuitMessage = nullptr;
+FnMessageBoxA MyMessageBoxA = nullptr;
+FnlstrcmpW MylstrcmpW = nullptr;
+FnGetWindowTextW MyGetWindowTextW = nullptr;
+FnDispatchMessageW MyDispatchMessageW = nullptr;
+FnTranslateMessage	MyTranslateMessage = nullptr;
+FnGetMessageW MyGetMessageW = nullptr;
+FnUpdateWindow MyUpdateWindow = nullptr;
+FnShowWindow MyShowWindow = nullptr;
+FnCreateWindowExW MyCreateWindowExW = nullptr;
+Fnmalloc Mymalloc = nullptr;
+FnRegisterClassExW MyRegisterClassExW = nullptr;
+FnRegisterClassW MyRegisterClassW = nullptr;
+FnCreateSolidBrush MyCreateSolidBrush = nullptr;
+FnGetModuleHandleW MyGetModuleHandleW = nullptr;
+FnLoadLibraryExA MyLoadLibraryExA = nullptr;
+FnGetProcAddress MyGetProcAddress = nullptr;
+
+// x32 asm
+#ifndef _WIN64
 DWORD puGetModule(const DWORD Hash)
 {
 	DWORD	nDllBase = 0;
-	__asm {
-		jmp			start;
-		/*函数1：遍历PEB_LDR_DATA链表HASH加密*/
-	GetModulVA:
-		push		ebp;
-		mov			ebp, esp;
-		sub			esp, 0x24;
-		push		edx;
-		push		ebx;
-		push		edi;
-		push		esi;
-		mov			ecx, 8;
-		mov			eax, 0CCCCCCCCh;
-		lea			edi, dword ptr[ebp - 0x20];
-		rep stos	dword ptr es : [edi];
-		xor			edx, edx;
-		add			edx, 0x10;
-		add			edx, 0x19;
-		inc			edx;
-		inc			edx;
-		inc			edx;
-		inc			edx;
-		inc			edx;
-		inc			edx;
-		inc			edx;
-		mov			esi, dword ptr fs : [edx]; // edx = 0x30
-		sub			edx, 0x24;
-		mov			esi, dword ptr[esi + edx]; // edx = 0xC
-		add			edx, 0x10;
-		mov			esi, dword ptr[esi + edx];// edx = 0x1c
-		add			edx, 0x4;
-	tag_Modul:
-		mov			dword ptr[ebp - 0x8], esi;	// 保存LDR_DATA_LIST_ENTRY
-		mov			ebx, dword ptr[esi + edx];	// DLL的名称指针(应该指向一个字符串) edx = 0x20;
-		mov			eax, dword ptr[ebp + 0x8];
-		push		eax;
-		push		ebx;						// +0xC
-		call		HashModulVA;
-		test		eax, eax;
-		jnz			_ModulSucess;
-		mov			esi, dword ptr[ebp - 0x8];
-		mov			esi, [esi];					// 遍历下一个
-		LOOP		tag_Modul;
-	_ModulSucess:
-		mov			esi, dword ptr[ebp - 0x8];
-		mov			eax, dword ptr[esi + 0x8];
-		pop			esi;
-		pop			edi;
-		pop			ebx;
-		pop			edx;
-		mov			esp, ebp;
-		pop			ebp;
-		ret;
+	//__asm {
+	//	jmp			start;
+	//	/*函数1：遍历PEB_LDR_DATA链表HASH加密*/
+	//GetModulVA:
+	//	push		ebp;
+	//	mov			ebp, esp;
+	//	sub			esp, 0x24;
+	//	push		edx;
+	//	push		ebx;
+	//	push		edi;
+	//	push		esi;
+	//	mov			ecx, 8;
+	//	mov			eax, 0CCCCCCCCh;
+	//	lea			edi, dword ptr[ebp - 0x20];
+	//	rep stos	dword ptr es : [edi] ;
+	//	xor edx, edx;
+	//	add			edx, 0x10;
+	//	add			edx, 0x19;
+	//	inc			edx;
+	//	inc			edx;
+	//	inc			edx;
+	//	inc			edx;
+	//	inc			edx;
+	//	inc			edx;
+	//	inc			edx;
+	//	mov			esi, dword ptr fs : [edx] ; // edx = 0x30
+	//	sub			edx, 0x24;
+	//	mov			esi, dword ptr[esi + edx]; // edx = 0xC
+	//	add			edx, 0x10;
+	//	mov			esi, dword ptr[esi + edx];// edx = 0x1c
+	//	add			edx, 0x4;
+	//tag_Modul:
+	//	mov			dword ptr[ebp - 0x8], esi;	// 保存LDR_DATA_LIST_ENTRY
+	//	mov			ebx, dword ptr[esi + edx];	// DLL的名称指针(应该指向一个字符串) edx = 0x20;
+	//	mov			eax, dword ptr[ebp + 0x8];
+	//	push		eax;
+	//	push		ebx;						// +0xC
+	//	call		HashModulVA;
+	//	test		eax, eax;
+	//	jnz			_ModulSucess;
+	//	mov			esi, dword ptr[ebp - 0x8];
+	//	mov			esi, [esi];					// 遍历下一个
+	//	LOOP		tag_Modul;
+	//_ModulSucess:
+	//	mov			esi, dword ptr[ebp - 0x8];
+	//	mov			eax, dword ptr[esi + 0x8];
+	//	pop			esi;
+	//	pop			edi;
+	//	pop			ebx;
+	//	pop			edx;
+	//	mov			esp, ebp;
+	//	pop			ebp;
+	//	ret;
 
-		/*函数2：HASH解密算法（宽字符解密）*/
-	HashModulVA:
-		push		ebp;
-		mov			ebp, esp;
-		sub			esp, 0x04;
-		mov			dword ptr[ebp - 0x04], 0x00;
-		push		ebx;
-		push		ecx;
-		push		edx;
-		push		esi;
-		// 获取字符串开始计算
-		mov			esi, [ebp + 0x8];
-		test		esi, esi;
-		jz			tag_failuers;
-		xor			ecx, ecx;
-		xor			eax, eax;
-	tag_loops:
-		mov			al, [esi + ecx];		// 获取字节加密
-		test		al, al;					// 0则退出
-		jz			tag_ends;
-		mov			ebx, [ebp - 0x04];
-		shl			ebx, 0x19;
-		mov			edx, [ebp - 0x04];
-		shr         edx, 0x07;
-		or ebx, edx;
-		add			ebx, eax;
-		mov[ebp - 0x4], ebx;
-		inc			ecx;
-		inc			ecx;
-		jmp			tag_loops;
-	tag_ends:
-		mov			ebx, [ebp + 0x0C];		// 获取HASH
-		mov			edx, [ebp - 0x04];
-		xor			eax, eax;
-		cmp			ebx, edx;
-		jne			tag_failuers;
-		mov			eax, 1;
-		jmp			tag_funends;
-	tag_failuers:
-		mov			eax, 0;
-	tag_funends:
-		pop			esi;
-		pop			edx;
-		pop			ecx;
-		pop			ebx;
-		mov			esp, ebp;
-		pop			ebp;
-		ret			0x08;
+	//	/*函数2：HASH解密算法（宽字符解密）*/
+	//HashModulVA:
+	//	push		ebp;
+	//	mov			ebp, esp;
+	//	sub			esp, 0x04;
+	//	mov			dword ptr[ebp - 0x04], 0x00;
+	//	push		ebx;
+	//	push		ecx;
+	//	push		edx;
+	//	push		esi;
+	//	// 获取字符串开始计算
+	//	mov			esi, [ebp + 0x8];
+	//	test		esi, esi;
+	//	jz			tag_failuers;
+	//	xor ecx, ecx;
+	//	xor eax, eax;
+	//tag_loops:
+	//	mov			al, [esi + ecx];		// 获取字节加密
+	//	test		al, al;					// 0则退出
+	//	jz			tag_ends;
+	//	mov			ebx, [ebp - 0x04];
+	//	shl			ebx, 0x19;
+	//	mov			edx, [ebp - 0x04];
+	//	shr         edx, 0x07;
+	//	or ebx, edx;
+	//	add			ebx, eax;
+	//	mov[ebp - 0x4], ebx;
+	//	inc			ecx;
+	//	inc			ecx;
+	//	jmp			tag_loops;
+	//tag_ends:
+	//	mov			ebx, [ebp + 0x0C];		// 获取HASH
+	//	mov			edx, [ebp - 0x04];
+	//	xor eax, eax;
+	//	cmp			ebx, edx;
+	//	jne			tag_failuers;
+	//	mov			eax, 1;
+	//	jmp			tag_funends;
+	//tag_failuers:
+	//	mov			eax, 0;
+	//tag_funends:
+	//	pop			esi;
+	//	pop			edx;
+	//	pop			ecx;
+	//	pop			ebx;
+	//	mov			esp, ebp;
+	//	pop			ebp;
+	//	ret			0x08;
 
-	start:
-		/*主模块*/
-		pushad;
-		push		Hash;
-		call		GetModulVA;
-		add			esp, 0x4;
-		mov			nDllBase, eax;
-		popad;
-	}
+	//start:
+	//	/*主模块*/
+	//	pushad;
+	//	push		Hash;
+	//	call		GetModulVA;
+	//	add			esp, 0x4;
+	//	mov			nDllBase, eax;
+	//	popad;
+	//}
 	return nDllBase;
 }
-
 DWORD puGetProcAddress(const DWORD dllvalues, const DWORD Hash)
 {
 	DWORD FunctionAddress = 0;
-	__asm {
-		jmp			start;
-		// 自定义函数计算Hash且对比返回正确的函数
-	GetHashFunVA:
-		push		ebp;
-		mov			ebp, esp;
-		sub			esp, 0x30;
-		push		edx;
-		push		ebx;
-		push		esi;
-		push		edi;
-		lea			edi, dword ptr[ebp - 0x30];
-		mov			ecx, 12;
-		mov			eax, 0CCCCCCCCh;
-		rep	stos	dword ptr es : [edi];
-		// 以上开辟栈帧操作（Debug版本模式）
-		mov			eax, [ebp + 0x8];				// ☆ kernel32.dll(MZ)
-		mov			dword ptr[ebp - 0x8], eax;
-		mov			ebx, [ebp + 0x0c];				// ☆ GetProcAddress Hash值
-		mov			dword ptr[ebp - 0x0c], ebx;
-		// 获取PE头与RVA及ENT
-		mov			edi, [eax + 0x3C];				// e_lfanew
-		lea			edi, [edi + eax];				// e_lfanew + MZ = PE
-		mov			dword ptr[ebp - 0x10], edi;		// ☆ 保存PE（VA）
-		// 获取ENT
-		mov			edi, dword ptr[edi + 0x78];		// 获取导出表RVA
-		lea			edi, dword ptr[edi + eax];		// 导出表VA
-		mov[ebp - 0x14], edi;						// ☆ 保存导出表VA
-		// 获取函数名称数量
-		mov			ebx, [edi + 0x18];
-		mov			dword ptr[ebp - 0x18], ebx;		// ☆ 保存函数名称数量
-		// 获取ENT
-		mov			ebx, [edi + 0x20];				// 获取ENT(RVA)
-		lea			ebx, [eax + ebx];				// 获取ENT(VA)
-		mov			dword ptr[ebp - 0x20], ebx;		// ☆ 保存ENT(VA)
-		// 遍历ENT 解密哈希值对比字符串
-		mov			edi, dword ptr[ebp - 0x18];
-		mov			ecx, edi;
-		xor			esi, esi;
-		mov			edi, dword ptr[ebp - 0x8];
-		jmp			_WHILE;
-		// 外层大循环
-	_WHILE:
-		mov			edx, dword ptr[ebp + 0x0c];		// HASH
-		push		edx;
-		mov			edx, dword ptr[ebx + esi * 4];	// 获取第一个函数名称的RVA
-		lea			edx, [edi + edx];				// 获取一个函数名称的VA地址
-		push		edx;							// ENT表中第一个字符串地址
-		call		_STRCMP;
-		cmp			eax, 0;
-		jnz			_SUCESS;
-		inc			esi;
-		LOOP		_WHILE;
-		jmp			_ProgramEnd;
-		// 对比成功之后获取循环次数（下标）cx保存下标数
-	_SUCESS:
-		// 获取EOT导出序号表内容
-		mov			ecx, esi;
-		mov			ebx, dword ptr[ebp - 0x14];
-		mov			esi, dword ptr[ebx + 0x24];
-		mov			ebx, dword ptr[ebp - 0x8];
-		lea			esi, [esi + ebx];				// 获取EOT的VA
-		xor			edx, edx;
-		mov			dx, [esi + ecx * 2];			// 注意双字 获取序号
-		// 获取EAT地址表RVA
-		mov			esi, dword ptr[ebp - 0x14];		// Export VA
-		mov			esi, [esi + 0x1C];
-		mov			ebx, dword ptr[ebp - 0x8];
-		lea			esi, [esi + ebx];				// 获取EAT的VA			
-		mov			eax, [esi + edx * 4];			// 返回值eax（GetProcess地址）
-		lea			eax, [eax + ebx];
-		jmp			_ProgramEnd;
+	//__asm {
+	//	jmp			start;
+	//	// 自定义函数计算Hash且对比返回正确的函数
+	//GetHashFunVA:
+	//	push		ebp;
+	//	mov			ebp, esp;
+	//	sub			esp, 0x30;
+	//	push		edx;
+	//	push		ebx;
+	//	push		esi;
+	//	push		edi;
+	//	lea			edi, dword ptr[ebp - 0x30];
+	//	mov			ecx, 12;
+	//	mov			eax, 0CCCCCCCCh;
+	//	rep	stos	dword ptr es : [edi] ;
+	//	// 以上开辟栈帧操作（Debug版本模式）
+	//	mov			eax, [ebp + 0x8];				// ☆ kernel32.dll(MZ)
+	//	mov			dword ptr[ebp - 0x8], eax;
+	//	mov			ebx, [ebp + 0x0c];				// ☆ GetProcAddress Hash值
+	//	mov			dword ptr[ebp - 0x0c], ebx;
+	//	// 获取PE头与RVA及ENT
+	//	mov			edi, [eax + 0x3C];				// e_lfanew
+	//	lea			edi, [edi + eax];				// e_lfanew + MZ = PE
+	//	mov			dword ptr[ebp - 0x10], edi;		// ☆ 保存PE（VA）
+	//	// 获取ENT
+	//	mov			edi, dword ptr[edi + 0x78];		// 获取导出表RVA
+	//	lea			edi, dword ptr[edi + eax];		// 导出表VA
+	//	mov[ebp - 0x14], edi;						// ☆ 保存导出表VA
+	//	// 获取函数名称数量
+	//	mov			ebx, [edi + 0x18];
+	//	mov			dword ptr[ebp - 0x18], ebx;		// ☆ 保存函数名称数量
+	//	// 获取ENT
+	//	mov			ebx, [edi + 0x20];				// 获取ENT(RVA)
+	//	lea			ebx, [eax + ebx];				// 获取ENT(VA)
+	//	mov			dword ptr[ebp - 0x20], ebx;		// ☆ 保存ENT(VA)
+	//	// 遍历ENT 解密哈希值对比字符串
+	//	mov			edi, dword ptr[ebp - 0x18];
+	//	mov			ecx, edi;
+	//	xor esi, esi;
+	//	mov			edi, dword ptr[ebp - 0x8];
+	//	jmp			_WHILE;
+	//	// 外层大循环
+	//_WHILE:
+	//	mov			edx, dword ptr[ebp + 0x0c];		// HASH
+	//	push		edx;
+	//	mov			edx, dword ptr[ebx + esi * 4];	// 获取第一个函数名称的RVA
+	//	lea			edx, [edi + edx];				// 获取一个函数名称的VA地址
+	//	push		edx;							// ENT表中第一个字符串地址
+	//	call		_STRCMP;
+	//	cmp			eax, 0;
+	//	jnz			_SUCESS;
+	//	inc			esi;
+	//	LOOP		_WHILE;
+	//	jmp			_ProgramEnd;
+	//	// 对比成功之后获取循环次数（下标）cx保存下标数
+	//_SUCESS:
+	//	// 获取EOT导出序号表内容
+	//	mov			ecx, esi;
+	//	mov			ebx, dword ptr[ebp - 0x14];
+	//	mov			esi, dword ptr[ebx + 0x24];
+	//	mov			ebx, dword ptr[ebp - 0x8];
+	//	lea			esi, [esi + ebx];				// 获取EOT的VA
+	//	xor edx, edx;
+	//	mov			dx, [esi + ecx * 2];			// 注意双字 获取序号
+	//	// 获取EAT地址表RVA
+	//	mov			esi, dword ptr[ebp - 0x14];		// Export VA
+	//	mov			esi, [esi + 0x1C];
+	//	mov			ebx, dword ptr[ebp - 0x8];
+	//	lea			esi, [esi + ebx];				// 获取EAT的VA			
+	//	mov			eax, [esi + edx * 4];			// 返回值eax（GetProcess地址）
+	//	lea			eax, [eax + ebx];
+	//	jmp			_ProgramEnd;
 
-	_ProgramEnd:
-		pop			edi;
-		pop			esi;
-		pop			ebx;
-		pop			edx;
-		mov			esp, ebp;
-		pop			ebp;
-		ret			0x8;
+	//_ProgramEnd:
+	//	pop			edi;
+	//	pop			esi;
+	//	pop			ebx;
+	//	pop			edx;
+	//	mov			esp, ebp;
+	//	pop			ebp;
+	//	ret			0x8;
 
-		// 循环对比HASH值
-	_STRCMP:
-		push		ebp;
-		mov			ebp, esp;
-		sub			esp, 0x04;
-		mov			dword ptr[ebp - 0x04], 0x00;
-		push		ebx;
-		push		ecx;
-		push		edx;
-		push		esi;
-		// 获取字符串开始计算
-		mov			esi, [ebp + 0x8];
-		xor			ecx, ecx;
-		xor			eax, eax;
+	//	// 循环对比HASH值
+	//_STRCMP:
+	//	push		ebp;
+	//	mov			ebp, esp;
+	//	sub			esp, 0x04;
+	//	mov			dword ptr[ebp - 0x04], 0x00;
+	//	push		ebx;
+	//	push		ecx;
+	//	push		edx;
+	//	push		esi;
+	//	// 获取字符串开始计算
+	//	mov			esi, [ebp + 0x8];
+	//	xor ecx, ecx;
+	//	xor eax, eax;
 
-	tag_loop:
-		mov			al, [esi + ecx];		// 获取字节加密
-		test		al, al;					// 0则退出
-		jz			tag_end;
-		mov			ebx, [ebp - 0x04];
-		shl			ebx, 0x19;
-		mov			edx, [ebp - 0x04];
-		shr         edx, 0x07;
-		or ebx, edx;
-		add			ebx, eax;
-		mov[ebp - 0x4], ebx;
-		inc			ecx;
-		jmp			tag_loop;
+	//tag_loop:
+	//	mov			al, [esi + ecx];		// 获取字节加密
+	//	test		al, al;					// 0则退出
+	//	jz			tag_end;
+	//	mov			ebx, [ebp - 0x04];
+	//	shl			ebx, 0x19;
+	//	mov			edx, [ebp - 0x04];
+	//	shr         edx, 0x07;
+	//	or ebx, edx;
+	//	add			ebx, eax;
+	//	mov[ebp - 0x4], ebx;
+	//	inc			ecx;
+	//	jmp			tag_loop;
 
-	tag_end:
-		mov			ebx, [ebp + 0x0C];		// 获取HASH
-		mov			edx, [ebp - 0x04];
-		xor			eax, eax;
-		cmp			ebx, edx;
-		jne			tag_failuer;
-		mov			eax, 1;
-		jmp			tag_funend;
+	//tag_end:
+	//	mov			ebx, [ebp + 0x0C];		// 获取HASH
+	//	mov			edx, [ebp - 0x04];
+	//	xor eax, eax;
+	//	cmp			ebx, edx;
+	//	jne			tag_failuer;
+	//	mov			eax, 1;
+	//	jmp			tag_funend;
 
-	tag_failuer:
-		mov			eax, 0;
+	//tag_failuer:
+	//	mov			eax, 0;
 
-	tag_funend:
-		pop			esi;
-		pop			edx;
-		pop			ecx;
-		pop			ebx;
-		mov			esp, ebp;
-		pop			ebp;
-		ret			0x08;
+	//tag_funend:
+	//	pop			esi;
+	//	pop			edx;
+	//	pop			ecx;
+	//	pop			ebx;
+	//	mov			esp, ebp;
+	//	pop			ebp;
+	//	ret			0x08;
 
-	start:
-		pushad;
-		push		Hash;						// Hash加密的函数名称
-		push		dllvalues;					// 模块基址.dll
-		call		GetHashFunVA;				// GetProcess
-		mov			FunctionAddress, eax;		// ☆ 保存地址
-		popad;
-	}
+	//start:
+	//	pushad;
+	//	push		Hash;						// Hash加密的函数名称
+	//	push		dllvalues;					// 模块基址.dll
+	//	call		GetHashFunVA;				// GetProcess
+	//	mov			FunctionAddress, eax;		// ☆ 保存地址
+	//	popad;
+	//}
 	return FunctionAddress;
 }
-#endif
+#endif // _WIN32
 
-//==============================================================================
-//    Sheller_code
-//==============================================================================
+// Sheller_code
 void SetString(HWND hWnd)
 {
 	MyPostQuitMessage = (FnPostQuitMessage)puGetProcAddress(g_stud.s_User32, 0xCAA94781);
@@ -595,7 +397,7 @@ void UnCompression()
 	qlz_state_decompress *state_decompress = (qlz_state_decompress *)MyVirtualAlloc(NULL, sizeof(qlz_state_decompress), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 	for (DWORD i = 0; i < g_stud.s_SectionCount - 2; ++i)
 	{
-		byte* Address = (byte *)(pSections->VirtualAddress + m_Dlllpbase);
+		BYTE* Address = (BYTE*)(pSections->VirtualAddress + m_Dlllpbase);
 
 		MyVirtualProtect(Address, g_stud.s_SectionOffsetAndSize[i][0], PAGE_EXECUTE_READWRITE, &Att_old);
 		MyVirtualProtect((void*)SectionAddress, g_stud.s_blen[i], PAGE_EXECUTE_READWRITE, &Att_olds);
@@ -859,14 +661,9 @@ int CreateWind()
 	return 0;
 }
 
-//==============================================================================
-//   main: sheller_code_entry
-//==============================================================================
-extern "C" __declspec(dllexport) void main()
+void WINAPI main()
 {
-#ifdef _WIN64
-
-#else
+#ifndef _WIN64
 	g_stud.s_Krenel32 = puGetModule(0xEC1C6278);
 	MyLoadLibraryExA = (FnLoadLibraryExA)puGetProcAddress(g_stud.s_Krenel32, 0xC0D83287);
 	g_stud.s_User32 = (DWORD64)MyLoadLibraryExA("user32.dll", NULL, NULL);
@@ -915,25 +712,21 @@ extern "C" __declspec(dllexport) void main()
 	// GetMyGetProcessAddress
 	MyGetProcAddress = (FnGetProcAddress)puGetProcAddress(g_stud.s_Krenel32, 0xBBAFDF85);
 	CreateWind();
-	return;
-	// Vm_End_Addr --> ret
 }
 
+// VM Module
 #ifdef _WIN64
-//==============================================================================
-//   vmentry: vm_entry
-//==============================================================================
-void VmCodetoExecDispath(
-	int handlerid,
-	unsigned char* pOpCode,
-	int codelen,
-	unsigned __int64 vmstarbaseaddr,
-	x86regeditNode* vmcurrentstackstatus
-)
+
+void VmCodetoExecDispath(int handlerid, unsigned char* pOpCode, int codelen, unsigned __int64 vmstarbaseaddr, x86regeditNode* vmcurrentstackstatus)
+/*
+	@1 ： 指令id
+	@2 ： pOpcode已解密
+	@3 ： 相对Cuurent_Vmstart偏移offset
+	@4 ： imagebase + Vmstartoffset + asmoffset(相对于vmstart)
+	@5 ： Vm_CurrentRegeditstatus 保存handler处理后属于自己代码的寄存器状态
+*/
 {
-	// @1 : exec opcode
-	// @2 : 基于vmstart_offset偏移, e8 xx xx xx xx(offset)
-	// @3 : current_stack_regedit
+
 	switch (handlerid)
 	{
 	case 1:
@@ -1048,14 +841,10 @@ void VmCodetoExecDispath(
 	}
 }
 
-int  VmOpcodeAnalHlper(
-	PVOID64 Vmcodeaddr,
-	unsigned char* pOpCode,
-	unsigned int size
-)
+int  VmOpcodeAnalHlper(PVOID64 Vmcodeaddr, unsigned char* pOpCode, unsigned int size) 
 {
 	ArrayHlerp* Hlerp = (ArrayHlerp*)Vmcodeaddr;
-	if (!Vmcodeaddr && !Hlerp)
+	if (Hlerp == nullptr || (!Hlerp))
 		return 0;
 
 	int XorKey = Hlerp->xorKey;
@@ -1145,38 +934,40 @@ int  VmOpcodeAnalHlper(
 	return 0;
 }
 
-int VmStart(
-	PVOID64 Vmcodeaddr
-)
+int VmStart(PVOID64 Vmcodeaddr)
 {
 	if (!Vmcodeaddr)
 		return 0;
+
 	// 获取加密代码段起始地址
-	VmNode* vmnode;
-	ArrayHlerp* Hlerp;
-	vmnode = (VmNode *)Vmcodeaddr;
+	VmNode* pVmNode = nullptr;
+	ArrayHlerp* Hlerp = nullptr;
+	pVmNode = (VmNode *)Vmcodeaddr;
 
 	// VmCode加密起始地址
-	DWORD64 VmcodeStartaddr = vmnode->VmAddroffset + m_Dlllpbase;
+	DWORD64 VmcodeStartaddr = pVmNode->VmAddroffset + m_Dlllpbase;
 	BYTE* pOpCode = (BYTE *)Mymalloc(16);
 	DWORD old_attr = 0;
 
 	// 初始化Current_stack_regedit_status
 	x86regeditNode x86regNode = { 0, };
+
 	// 初始化运行代码的栈空间,申请当前堆地址,大小不限,随着执行完毕之后ret销毁。
 	// 申请的是栈底  +0x1024栈顶
 	PVOID64 stack = MyVirtualAlloc(NULL, 0x100000, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 	Mymemset(stack, 0, 0x100000);
 	if (!stack)
 		return 0;
+
 	// 初始化Current_Vmstack
 	x86regNode.rsp = (unsigned __int64)stack + 0x100000;
 	x86regNode.rbp = (unsigned __int64)stack + 0x100000;
 
-	// data加壳过程中保存的是偏移offset
-	Hlerp = (ArrayHlerp*)(vmnode->Hlperdataoffset + m_Dlllpbase);
+	// Data加壳过程中保存的是偏移offset
+	Hlerp = (ArrayHlerp*)(pVmNode->Hlperdataoffset + m_Dlllpbase);
+
 	// Vm执行代码
-	for (int i = 0; i < vmnode->Vmencodeasmlen; ++i)
+	for (int i = 0; i < pVmNode->Vmencodeasmlen; ++i)
 	{
 		if (!Hlerp)
 			break;
@@ -1202,12 +993,7 @@ int VmStart(
 		// Handler处理
 		if (handler_id)
 		{
-			// @1 ： 指令id
-			// @2 ： pOpcode已解密
-			// @3 ： 相对Cuurent_Vmstart偏移offset
-			// @4 ： imagebase + Vmstartoffset + asmoffset(相对于vmstart)
-			// @5 ： Vm_CurrentRegeditstatus 保存handler处理后属于自己代码的寄存器状态
-			VmCodetoExecDispath(handler_id, pOpCode, Hlerp->bytesize, m_Dlllpbase + vmnode->VmAddroffset + Hlerp->startoffset, &x86regNode);
+			VmCodetoExecDispath(handler_id, pOpCode, Hlerp->bytesize, m_Dlllpbase + pVmNode->VmAddroffset + Hlerp->startoffset, &x86regNode);
 
 			// 意味着执行过ret.将不再线性执行
 			if (x86regNode.rbp == 0)
@@ -1228,7 +1014,9 @@ int VmStart(
 		Myfree(stack);
 	return 1;
 }
-extern "C" __declspec(dllexport) void vmentry()
+
+// unit test.
+void WINAPI vmentry()
 {
 	// 1. 使用全局变量保存加密地址列表,地址被读取-虚拟机执行。
 	// 2. 正常虚拟机会有一套类似于断点 eip == VmcodeAddr，控制eip转换到虚拟机执行。
@@ -1301,4 +1089,5 @@ extern "C" __declspec(dllexport) void vmentry()
 		}
 	}
 }
+
 #endif

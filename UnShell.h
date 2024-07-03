@@ -10,8 +10,8 @@ public:
 	~UnShell();
 
 public:
-	void puRepCompressionData(){ this->RepCompressionData(); }
-	void puDeleteSectionInfo(){ this->DeleteSectionInfo(); }
+	BOOL puRepCompressionData(){ return this->RepCompressionData(); }
+	BOOL puDeleteSectionInfo(){ return this->DeleteSectionInfo(); }
 	BOOL puSaveUnShell(){ return this->SaveUnShell(); }
 
 private:

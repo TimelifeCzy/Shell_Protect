@@ -1,0 +1,47 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.32106.194
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CombatShell", "CombatShell\CombatShell.vcxproj", "{DDA1CDD8-B00B-4830-A103-371D2B91399B}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CombatShellManage", "CombatShellManage.vcxproj", "{03AEDF10-24E0-420D-AD89-B186018CCE0E}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Debug|Win32 = Debug|Win32
+		Debug|x64 = Debug|x64
+		Release|Any CPU = Release|Any CPU
+		Release|Win32 = Release|Win32
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{DDA1CDD8-B00B-4830-A103-371D2B91399B}.Debug|Any CPU.ActiveCfg = Debug|Win32
+		{DDA1CDD8-B00B-4830-A103-371D2B91399B}.Debug|Win32.ActiveCfg = Release|Win32
+		{DDA1CDD8-B00B-4830-A103-371D2B91399B}.Debug|Win32.Build.0 = Release|Win32
+		{DDA1CDD8-B00B-4830-A103-371D2B91399B}.Debug|x64.ActiveCfg = Release|x64
+		{DDA1CDD8-B00B-4830-A103-371D2B91399B}.Debug|x64.Build.0 = Release|x64
+		{DDA1CDD8-B00B-4830-A103-371D2B91399B}.Release|Any CPU.ActiveCfg = Release|Win32
+		{DDA1CDD8-B00B-4830-A103-371D2B91399B}.Release|Win32.ActiveCfg = Release|Win32
+		{DDA1CDD8-B00B-4830-A103-371D2B91399B}.Release|Win32.Build.0 = Release|Win32
+		{DDA1CDD8-B00B-4830-A103-371D2B91399B}.Release|x64.ActiveCfg = Release|x64
+		{DDA1CDD8-B00B-4830-A103-371D2B91399B}.Release|x64.Build.0 = Release|x64
+		{03AEDF10-24E0-420D-AD89-B186018CCE0E}.Debug|Any CPU.ActiveCfg = Debug|Win32
+		{03AEDF10-24E0-420D-AD89-B186018CCE0E}.Debug|Win32.ActiveCfg = Debug|Win32
+		{03AEDF10-24E0-420D-AD89-B186018CCE0E}.Debug|Win32.Build.0 = Debug|Win32
+		{03AEDF10-24E0-420D-AD89-B186018CCE0E}.Debug|x64.ActiveCfg = Debug|x64
+		{03AEDF10-24E0-420D-AD89-B186018CCE0E}.Debug|x64.Build.0 = Debug|x64
+		{03AEDF10-24E0-420D-AD89-B186018CCE0E}.Release|Any CPU.ActiveCfg = Release|Win32
+		{03AEDF10-24E0-420D-AD89-B186018CCE0E}.Release|Win32.ActiveCfg = Release|Win32
+		{03AEDF10-24E0-420D-AD89-B186018CCE0E}.Release|Win32.Build.0 = Release|Win32
+		{03AEDF10-24E0-420D-AD89-B186018CCE0E}.Release|x64.ActiveCfg = Release|x64
+		{03AEDF10-24E0-420D-AD89-B186018CCE0E}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {062D904D-02D0-47F1-9016-A17F140CA8FD}
+	EndGlobalSection
+EndGlobal

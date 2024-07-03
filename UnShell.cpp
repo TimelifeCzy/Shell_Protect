@@ -81,6 +81,9 @@ BOOL UnShell::RepCompressionData()
 	m_studBase = LoadLibraryEx(L"Stud.dll", NULL, DONT_RESOLVE_DLL_REFERENCES);
 #endif
 	g_stu = (_Stud*)GetProcAddress((HMODULE)m_studBase, "g_stud");
+	if (!m_studBase || (!g_stu)) {
+		return false;
+	}
 
 	DWORD SectionCount = pHeadres->FileHeader.NumberOfSections;
 
@@ -132,11 +135,12 @@ BOOL UnShell::RepCompressionData()
 	BYTE Name[] = ".UPX";
 
 	PIMAGE_SECTION_HEADER address = (PIMAGE_SECTION_HEADER)obj_pePE.puGetSectionAddress((char*)m_Base, Name);
+	if (!address) {
+		return false;
+	}
 
 	int nFlag = 0;
-
 	DWORD Address = address->PointerToRawData;
-
 	for (DWORD i = 0; i < SectionCount - 2; ++i)
 	{
 		if (g_stu->s_blen[nFlag] == 0)
@@ -199,11 +203,15 @@ BOOL UnShell::DeleteSectionInfo()
 	PuPEInfo pePu;
 
 	DWORD64 masAdd = (DWORD64)pePu.puGetSectionAddress((char*)m_Base, Name);
+	if (!masAdd)
+		return false;
 	VirtualProtect((char*)masAdd, 40, PAGE_READWRITE, &old);
 	memcpy((char*)masAdd, temp, 40);
 	VirtualProtect((char*)masAdd, 40, old, &old);
 
 	DWORD64 comAdd = (DWORD64)pePu.puGetSectionAddress((char*)m_Base, Name1);
+	if (!comAdd)
+		return false;
 	VirtualProtect((char*)comAdd, 40, PAGE_READWRITE, &old);
 	memcpy((char*)comAdd, temp, 40);
 	VirtualProtect((char*)comAdd, 40, old, &old);

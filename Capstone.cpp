@@ -119,6 +119,8 @@ int Capstone::AnalyencodeVmHlper(cs_insn* ins, unsigned int rankey)
 // 指令分析-数据保存
 void Capstone::AnalyOpcodeHlper(const void* pAddr, int nLen)
 {
+	if (!g_dataHlpers || (nullptr == g_dataHlpers))
+		return;
 	g_Vm->data = (ArrayHlerp *)g_dataHlpers;
 	memset(g_Vm->data, 0, nLen * sizeof(ArrayHlerp));
 
@@ -126,6 +128,8 @@ void Capstone::AnalyOpcodeHlper(const void* pAddr, int nLen)
 	if (!pAddr && !nLen)
 		return;
 	BYTE* pOpCode = (BYTE *)malloc(nLen * 16);
+	if (!pOpCode)
+		return;
 	memset(pOpCode, 0, (sizeof(BYTE) * 16 * nLen));
 	SIZE_T read = 0;
 	cs_insn* ins = nullptr;
