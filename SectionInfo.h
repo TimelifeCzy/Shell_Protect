@@ -1,9 +1,5 @@
 #pragma once
-#include "stdafx.h"
 #include "resource.h"
-#include "afxcmn.h"
-
-// SectionInfo 对话框
 
 class SectionInfo : public CDialogEx
 {
@@ -12,19 +8,18 @@ class SectionInfo : public CDialogEx
 public:
 	SectionInfo(CWnd* pParent = NULL);   // 标准构造函数
 	virtual ~SectionInfo();
-
-// 对话框数据
 	enum { IDD = IDD_DIALOG2 };
+	virtual BOOL OnInitDialog();
 
 protected:
 	virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV 支持
 
 	DECLARE_MESSAGE_MAP()
-public:
-	CListCtrl m_SectionList;
-	virtual BOOL OnInitDialog();
 
-	/*自定义数据*/
+public:
+	void InitSectionData();
+	void SetAnalyzeFilePath(CString csPath) { m_csFilePath = csPath; }
+
 private:
 	// 显示区段信息
 	void ShowSectionInfo();
@@ -35,4 +30,9 @@ private:
 	// 保存区段数量
 	PIMAGE_NT_HEADERS pNtHeadre;
 	DWORD SectionCount = 0;
+	CListCtrl m_SectionList;
+	// 解析文件路径
+	CString m_csFilePath;
 };
+
+using SingleSectionInfo = ustdex::Singleton<SectionInfo>;

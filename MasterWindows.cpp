@@ -1,5 +1,4 @@
-﻿// MasterWindows.cpp 
-#include "stdafx.h"
+﻿#include "stdafx.h"
 #include "MasterWindows.h"
 #include "afxdialogex.h"
 #include "puPEinfoData.h"
@@ -8,9 +7,9 @@
 #include "studData.h"
 #include "CompressionData.h"
 #include "UnShell.h"
+#include <io.h>
 
 CString UnShllerProcPath;
-
 char g_filenameonly[MAX_PATH] = { 0, };
 
 // MasterWindows
@@ -74,7 +73,6 @@ BOOL MasterWindows::OnInitDialog()
 	m_dc.SelectObject(&m_bmp);
 	//使窗口无效,这样OnPaint函数就会被触发,使之被画出来
 	Invalidate(FALSE);
-
 	return TRUE; 
 }
 
@@ -87,17 +85,16 @@ void MasterWindows::OnBnClickedButton1()
 		AfxMessageBox(L"请先拖入文件");
 		return;
 	}
-	// ☆ 先增加新区~段后压缩
-	CString nStr, tmep;
-	PuPEInfo obj_Peinfo;
 
+	// 先增加新区~段后压缩
 	// 1. 新增区段
-	if (!NewSection())
+	if (!NewSection()) {
 		AfxMessageBox(L"添加新区段失败");
-
-	CloseHandle(obj_Peinfo.puFileHandle()); UpdateData(TRUE);
+		return;
+	}
 
 	// 保存Path，拷贝使用
+	CString nStr, tmep;
 	nStr = m_MasterStaticTextStr;
 
 	// 获取文件名
@@ -118,54 +115,43 @@ void MasterWindows::OnBnClickedButton1()
 		strcpy(g_filenameonly, "FileData.txt");
 		AfxMessageBox(L"转换文件名有问题");
 	}
-	obj_Peinfo.puOpenFileLoad(m_MasterStaticTextStr);
 
 	// 2. 压缩全部区段 压缩的时候不清空数据目录表以及区段大小（不压缩新增区段）
-	CompressionData obj_ComperData;
-
-	CloseHandle(obj_Peinfo.puFileHandle()); UpdateData(TRUE);
-
-	obj_Peinfo.puOpenFileLoad(m_MasterStaticTextStr);
-
-
-	if (!obj_ComperData.puCompressSection()) {
-		AfxMessageBox(L"CompressSection failuer!");
-		return;
+	{
+		CompressionData obj_ComperData;
+		obj_ComperData.puInit(m_MasterStaticTextStr);
+		if (!obj_ComperData.puCompressSection()) {
+			AfxMessageBox(L"CompressSection failuer!");
+			return;
+		}
 	}
 
 
-	CloseHandle(obj_Peinfo.puFileHandle());
-
-	m_MasterStaticTextStr = "C:\\Users\\CompressionMask.exe";
-
-	obj_Peinfo.puOpenFileLoad(m_MasterStaticTextStr);
-
-	// 3. Stud壳数据拷贝/操作
+	// 3. CombatShell 数据拷贝/操作
+	std::string sDirectory = "";
+	CodeTool::CGetCurrentDirectory(sDirectory);
+	m_MasterStaticTextStr = (sDirectory + "CompressionMask.exe").c_str();
 	studData obj_stuData;
-
+	if (!obj_stuData.puInit(m_MasterStaticTextStr)) {
+		AfxMessageBox(L"studData failuer!");
+		return;
+	}
 	obj_stuData.puLoadLibraryStud();
-
 	obj_stuData.puRepairReloCationStud();
-
 	if (obj_stuData.puCopyStud())
 	{
-		CloseHandle(obj_Peinfo.puFileHandle());
 		UpdateData(TRUE);
-		// 这些操作只为了最后保留一个有效加壳文件，其实垃圾exe清理
-		int nstatus = CopyFile(L"C:\\Users\\CompressionMask.exe", nStr, FALSE);
+		// clear exe
+		int nstatus = CopyFile(m_MasterStaticTextStr.GetString(), nStr.GetString(), FALSE);
 		if (nstatus)
 		{
 			m_MasterStaticTextStr = nStr;
-			DeleteFile(L"C:\\Users\\CompressionMask.exe");
+			DeleteFile(m_MasterStaticTextStr.GetString());
 		}
-		obj_Peinfo.puOpenFileLoad(m_MasterStaticTextStr);
 		AfxMessageBox(m_MasterStaticTextStr + L"   Success!");
 	}
 	else
-		AfxMessageBox(L"StudWrite failure!");
-
-	// 4、收尾工作
-	CloseHandle(obj_Peinfo.puFileHandle());
+		AfxMessageBox(m_MasterStaticTextStr + L"   Failure!");
 }
 
 void MasterWindows::OnDropFiles(HDROP hDropInfo)
@@ -186,8 +172,10 @@ void MasterWindows::OnDropFiles(HDROP hDropInfo)
 
 void MasterWindows::ShowPEInfoData(const CString & FileName)
 {
-	PuPEInfo obj_puPe; CString Tempstr;	DWORD TempdwCode = 0;
+	CString Tempstr;	
+	DWORD TempdwCode = 0;
 
+	PuPEInfo obj_puPe;
 	if (!obj_puPe.puOpenFileLoad(FileName))
 		return;
 
@@ -249,6 +237,7 @@ void MasterWindows::OnBnClickedButton4()
 		AfxMessageBox(L"请先拖入文件");
 		return;
 	}
+
 	SectionInfo obj_section;
 	obj_section.DoModal();
 	return;
@@ -263,24 +252,26 @@ void MasterWindows::OnBnClickedButton9()
 		AfxMessageBox(L"请先拖入文件");
 		return;
 	}
-	if (NewSection())
+	if (NewSection()) {
+		ShowPEInfoData(m_MasterStaticTextStr);
 		AfxMessageBox(L"Success");
-	else
+	}
+	else {
 		AfxMessageBox(L"Fauilter");
+	}
 }
 
 BOOL MasterWindows::NewSection()
 {
 	BOOL nRet = TRUE;
-	BYTE Name[] = ".VMP";
-	AddSection obj_addsection; 
+	BYTE Name[] = NEWSECITONNAME;
 
 	// 添加区段提前申请Stub大小
 	DWORD SectionSize = 0;
 	std::string sDriectory = "";
 	CodeTool::CGetCurrentDirectory(sDriectory);
 	if (!sDriectory.empty()) {
-		const std::string sStuFile = (sDriectory + "Stud.dll").c_str();
+		const std::string sStuFile = (sDriectory + "CombatShell.dll").c_str();
 		const HANDLE hFile = CreateFileA(sStuFile.c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
 			NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 		if (hFile) {
@@ -292,11 +283,13 @@ BOOL MasterWindows::NewSection()
 	}
 	else
 		return false;
-	obj_addsection.puModifySectioNumber();
-	nRet = obj_addsection.puModifySectionInfo(Name, SectionSize);
-	obj_addsection.puModifyProgramEntryPoint();
-	obj_addsection.puModifySizeofImage();
-	nRet = obj_addsection.puAddNewSectionByData(SectionSize);
+
+	SingleAddSection::instance()->puInti(m_MasterStaticTextStr);
+	SingleAddSection::instance()->puModifySectioNumber();
+	nRet = SingleAddSection::instance()->puModifySectionInfo(Name, SectionSize);
+	SingleAddSection::instance()->puModifyProgramEntryPoint();
+	SingleAddSection::instance()->puModifySizeofImage();
+	nRet = SingleAddSection::instance()->puAddNewSectionByData(SectionSize);
 	return nRet;
 }
 
@@ -316,7 +309,7 @@ void MasterWindows::OnBnClickedButton3()
 		return;
 	}
 	CompressionData obj_ComperData;
-	
+	obj_ComperData.puInit(m_MasterStaticTextStr);
 	if (!obj_ComperData.puCompressSection())
 		AfxMessageBox(L"CompressSection failuer!");
 	else
@@ -337,6 +330,10 @@ void MasterWindows::OnBnClickedButton2()
 	UnShllerProcPath = m_MasterStaticTextStr;
 
 	UnShell obj_Unshell;
+	if (!obj_Unshell.puUnShell()) {
+		AfxMessageBox(L"puUnShell error");
+		return;
+	}
 	if (!obj_Unshell.puRepCompressionData()) {
 		AfxMessageBox(L"puRepCompressionData error.");
 		return;

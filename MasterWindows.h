@@ -3,9 +3,6 @@
 #include "resource.h"
 #include "afxwin.h"
 
-
-// MasterWindows
-
 class MasterWindows : public CDialogEx
 {
 	DECLARE_DYNAMIC(MasterWindows)
@@ -20,6 +17,7 @@ protected:
 	virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV
 
 	DECLARE_MESSAGE_MAP()
+
 public:
 	virtual BOOL OnInitDialog();
 	CStatic m_MasterStaticText;
@@ -37,14 +35,14 @@ public:
 	CDC m_dc;        //DC对象
 
 private:
-
 	void ShowPEInfoData(const CString & FileName);
-
 	BOOL NewSection();
+
 public:
 	afx_msg void OnBnClickedButton3();
 	afx_msg void OnBnClickedButton2();
 	afx_msg HBRUSH OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor);
 	afx_msg void OnPaint();
 	CStatic m_bitmapZionloab;
+
 };

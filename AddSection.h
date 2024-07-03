@@ -1,7 +1,6 @@
 #pragma once
 #ifndef ADDSECTION_H_
 #define ADDSECTION_H_
-#include "stdafx.h"
 
 /*
 	ÀàÃû³Æ£ºAddSection
@@ -17,6 +16,11 @@ public:
 	~AddSection();
 
 public:
+	void puInti(CString sFilePath) {
+		m_FilePath = sFilePath;
+		this->Init();
+	}
+
 	void puModifySectioNumber(){ this->ModifySectionNumber(); }
 
 	void puModifyProgramEntryPoint(){ this->ModifyProgramEntryPoint(); }
@@ -27,12 +31,14 @@ public:
 
 	BOOL puAddNewSectionByData(const DWORD & size){ return this->AddNewSectionByteData(size); }
 
-	void* puGetNewBaseAddress(){ return this->newlpBase; }
+	void* puGetNewBaseAddress(){ return this->m_newlpBase; }
 
 	DWORD puGetNewBaseSize(){ return this->FileSize + 0x1000; }
 
 
 private:
+	BOOL Init();
+
 	BOOL ModifySectionNumber();
 
 	BOOL ModifySectionInfo(const BYTE* Name, const DWORD & size);
@@ -55,12 +61,16 @@ private:
 
 	DWORD FileSize = 0;
 
-	static char* newlpBase;
-
 	HANDLE FileHandle = nullptr;
 
 	PIMAGE_SECTION_HEADER NewpSection = { 0 };
 
 	DWORD64 OldOep = 0;
+
+	CString m_FilePath;
+
+	char* m_newlpBase = nullptr;
 };
 #endif
+
+using SingleAddSection = ustdex::Singleton<AddSection>;

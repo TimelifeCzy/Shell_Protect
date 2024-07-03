@@ -1,6 +1,3 @@
-// SectionInfo.cpp : 实现文件
-//
-
 #include "stdafx.h"
 #include "SectionInfo.h"
 #include "afxdialogex.h"
@@ -15,7 +12,6 @@ IMPLEMENT_DYNAMIC(SectionInfo, CDialogEx)
 SectionInfo::SectionInfo(CWnd* pParent /*=NULL*/)
 	: CDialogEx(SectionInfo::IDD, pParent)
 {
-
 }
 
 SectionInfo::~SectionInfo()
@@ -28,49 +24,43 @@ void SectionInfo::DoDataExchange(CDataExchange* pDX)
 	DDX_Control(pDX, IDC_LIST1, m_SectionList);
 }
 
-
 BEGIN_MESSAGE_MAP(SectionInfo, CDialogEx)
 END_MESSAGE_MAP()
-
-
 
 BOOL SectionInfo::OnInitDialog()
 {
 	CDialogEx::OnInitDialog();
+	InitSectionData();
+	return TRUE;
+}
 
+void SectionInfo::InitSectionData()
+{
 	CRect rc;
-
 	DWORD dwSize = m_SectionList.GetExtendedStyle();
-
 	m_SectionList.SetExtendedStyle(dwSize | LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES);
-
 	m_SectionList.GetClientRect(rc);
-
 	int nWidth = rc.Width();
-
-	for (int i = 0; i < 6; ++i){ m_SectionList.InsertColumn(i, strName[i], LVCFMT_CENTER, nWidth / 6); }
-
-	PuPEInfo obj_peinfo;
+	for (int i = 0; i < 6; ++i) { m_SectionList.InsertColumn(i, strName[i], LVCFMT_CENTER, nWidth / 6); }
 
 	pSectionHeadre = { 0 };	pNtHeadre = { 0 };
-
-	pSectionHeadre = (PIMAGE_SECTION_HEADER)obj_peinfo.puGetSection();
-
-	pNtHeadre = (PIMAGE_NT_HEADERS)obj_peinfo.puGetNtHeadre();
-
+	if (!SinglePuPEInfo::instance()->puGetLoadFileSuccess()) {
+		if (!m_csFilePath.IsEmpty())
+			return;
+		SinglePuPEInfo::instance()->puOpenFileLoadEx(m_csFilePath);
+	}
+	pSectionHeadre = (PIMAGE_SECTION_HEADER)SinglePuPEInfo::instance()->puGetSection();
+	pNtHeadre = (PIMAGE_NT_HEADERS)SinglePuPEInfo::instance()->puGetNtHeadre();
 	SectionCount = pNtHeadre->FileHeader.NumberOfSections;
-
+	if (!pSectionHeadre || (!pNtHeadre) || (SectionCount <= 0))
+		return;
 	ShowSectionInfo();
-
-	return TRUE;
 }
 
 void SectionInfo::ShowSectionInfo()
 { 
 	PIMAGE_SECTION_HEADER tempSectionHeadre = pSectionHeadre;
-
 	DWORD dwTemp = 0;	CString str;
-
 	for (DWORD i = 0; i < SectionCount; ++i)
 	{
 

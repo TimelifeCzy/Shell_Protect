@@ -1,7 +1,7 @@
 ﻿#include "Capstone.h"
 #include "windows.h"
 #include "iostream"
-#include "Stud/Stud.h"
+#include "CombatShell/CombatShell.h"
 #include <time.h>
 
 using std::cout; using std::endl;

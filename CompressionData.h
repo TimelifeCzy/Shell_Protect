@@ -1,7 +1,4 @@
 ﻿#pragma once
-#ifndef COMPRESSIONDATA_H_
-#define COMPRESSIONDATA_H_
-#include "stdafx.h"
 
 /*
 	类名称：CompressionData
@@ -19,12 +16,17 @@ public:
 	~CompressionData();
 
 public:
+	VOID puInit(CString csMasterStaticTextStr) { 
+		m_MasterStaticTextStr = csMasterStaticTextStr;
+		this->ReFileInit();
+	}
 	// void puAddCompresData(){ this->AddCompreDataSection(); }
 	BOOL puCompressSection() { return this->CompressSectionData(); }
 	// void puCleanDirectData(char* NewAddress){ this->CleanDirectData(NewAddress); }
 	HANDLE puGetStubBase() { return this->m_studBase; }
 
 private:
+	VOID ReFileInit();
 	// 压缩PE区段数据
 	BOOL CompressSectionData();
 	// 加密PE区段数据
@@ -35,7 +37,6 @@ private:
 	DWORD IsSectionSize(DWORD MiscVirtualsize, DWORD sizeOfRawData);
 	// 添加一个区段给压缩后的数据使用
 	void AddCompreDataSection(const DWORD & size);
-
 	// Vmocde
 	void VmcodeEntry(char* TargetCode, _Out_ int &CodeLength);
 
@@ -45,7 +46,7 @@ public:
 
 private:
 	// 获取基址
-	static void* m_lpBase;
+	void* m_lpBase = nullptr;
 	// 保存区段头
 	void* m_SectionHeadre = nullptr;
 	// 保存文件大小
@@ -55,13 +56,13 @@ private:
 	// 获取文件句柄
 	void* m_hFile = nullptr;
 	// 保存加载stub的地址
-	static HANDLE m_studBase;
+	HANDLE m_studBase = nullptr;
 	// 保存mask壳区段地址
 	PIMAGE_SECTION_HEADER m_maskAddress;
 	// 保存文件名称更新
 	CString FileName;
 	// 文件句柄
 	FILE* fpFile = nullptr;
+	// 加壳文件路径
+	CString m_MasterStaticTextStr;
 };
-
-#endif

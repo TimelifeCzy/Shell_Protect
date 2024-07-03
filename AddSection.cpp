@@ -1,4 +1,5 @@
-﻿#include "AddSection.h"
+﻿#include "stdafx.h"
+#include "AddSection.h"
 #include "puPEinfoData.h"
 
 // x64 asm 
@@ -6,32 +7,42 @@
 extern "C" void __stdcall AsmCountTemp(PVOID dwdata);
 extern "C" void __stdcall AsmCountTemp1(PVOID dwdata);
 #else
-
 #endif
-
-
-char* AddSection::newlpBase = nullptr;
 
 AddSection::AddSection()
 {
-	PuPEInfo obj_PuPE;
-
-	pFileBaseData = obj_PuPE.puGetImageBase();
-
-	pNtHeadre = obj_PuPE.puGetNtHeadre();
-
-	pSectionHeadre = obj_PuPE.puGetSection();
-
-	FileSize = obj_PuPE.puFileSize();
-
-	FileHandle = obj_PuPE.puFileHandle();
-
-	OldOep = obj_PuPE.puOldOep();
 }
 
 AddSection::~AddSection()
 {
+	if (pFileBaseData) {
+		free(pFileBaseData);
+		pFileBaseData = nullptr;
+	}
+	if (FileHandle) {
+		CloseHandle(FileHandle);
+		FileHandle = nullptr;
+	}
+}
 
+BOOL AddSection::Init() {
+	if (pFileBaseData) {
+		free(pFileBaseData);
+		pFileBaseData = nullptr;
+	}
+	if (FileHandle) {
+		CloseHandle(FileHandle);
+		FileHandle = nullptr;
+	}
+
+	SinglePuPEInfo::instance()->puOpenFileLoadEx(m_FilePath);
+	pFileBaseData = SinglePuPEInfo::instance()->puGetImageBase();
+	pNtHeadre = SinglePuPEInfo::instance()->puGetNtHeadre();
+	pSectionHeadre = SinglePuPEInfo::instance()->puGetSection();
+	FileSize = SinglePuPEInfo::instance()->puFileSize();
+	FileHandle = SinglePuPEInfo::instance()->puFileHandle();
+	OldOep = SinglePuPEInfo::instance()->puOldOep();
+	return true;
 }
 
 BOOL AddSection::ModifySectionNumber()
@@ -148,22 +159,28 @@ BOOL AddSection::ModifySizeofImage()
 
 BOOL AddSection::AddNewSectionByteData(const DWORD & size)
 {
-	newlpBase = (char *)malloc(FileSize + size);
-	if (!newlpBase || (nullptr == newlpBase))
+	const int newFileSize = FileSize + size;
+	m_newlpBase = (char *)malloc(newFileSize);
+	if (!m_newlpBase || (nullptr == m_newlpBase))
 		return false;
+	memset(m_newlpBase, 0, newFileSize);
 
-	memset(newlpBase, 0, (FileSize + size));
 	if (pFileBaseData) {
-		memcpy(newlpBase, pFileBaseData, FileSize);
+		memcpy(m_newlpBase, pFileBaseData, FileSize);
 		free(pFileBaseData);
+		pFileBaseData = nullptr;
 	}
 	else
 		return false;
 
 	DWORD dWriteSize = 0; OVERLAPPED OverLapped = { 0 };
-	int nRetCode = WriteFile(FileHandle, newlpBase, (FileSize + size), &dWriteSize, &OverLapped);
-	if (newlpBase)
-		free(newlpBase);
+	int nRetCode = WriteFile(FileHandle, m_newlpBase, (FileSize + size), &dWriteSize, &OverLapped);
+	CloseHandle(FileHandle); 
+	FileHandle = nullptr;
+	if (m_newlpBase) {
+		free(m_newlpBase);
+		m_newlpBase = nullptr;
+	}
 	if (dWriteSize == 0){ 
 		AfxMessageBox(L"CreateSection WriteFIle faliuer"); 
 		return FALSE; 

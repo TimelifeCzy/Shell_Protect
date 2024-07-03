@@ -11,9 +11,11 @@
 #pragma comment(linker, "/merge:.rdata=.text")
 #pragma comment(linker, "/section:.text,RWE")
 
+// Windows
 HINSTANCE g_hInstance = nullptr;
+static TCHAR szWindowClass[] = TEXT("CombatShellWnd");
 
-// IAT encode Key
+// IAT Encode Key
 #define XORKEY 0x13973575
 
 // DLL_ImageBase
@@ -32,9 +34,9 @@ extern "C" {
 	DllExport Stud g_stud = { 0, };
 	DllExport VmNode g_VmNode = { 0, };
 	DllExport char g_dataHlper[0x2048] = { 0, };
-	DllExport void WINAPI main();
+	DllExport void WINAPI CombatShellEntry();
 #ifdef _WIN64
-	DllExport void WINAPI vmentry();
+	DllExport void WINAPI VmEntry();
 #endif
 }
 
@@ -640,7 +642,7 @@ int CreateWind()
 	if (!MyRegisterClassExW(&wcex))
 	{
 		DWORD nError = MyGetLastError();
-		MyMessageBoxA(NULL, "注册窗口类失败", "警告", MB_OK | MB_ICONERROR);
+		MyMessageBoxA(NULL, "Resgiter Windows Error", "warning", MB_OK | MB_ICONERROR);
 		MyExitProcess(0);
 	}
 
@@ -661,7 +663,7 @@ int CreateWind()
 	return 0;
 }
 
-void WINAPI main()
+void WINAPI CombatShellEntry()
 {
 #ifndef _WIN64
 	g_stud.s_Krenel32 = puGetModule(0xEC1C6278);
@@ -711,6 +713,7 @@ void WINAPI main()
 	MyVirtualProtect = (FnVirtualProtect)puGetProcAddress(g_stud.s_Krenel32, 0xEF64A41E);
 	// GetMyGetProcessAddress
 	MyGetProcAddress = (FnGetProcAddress)puGetProcAddress(g_stud.s_Krenel32, 0xBBAFDF85);
+	
 	CreateWind();
 }
 
@@ -967,7 +970,7 @@ int VmStart(PVOID64 Vmcodeaddr)
 	Hlerp = (ArrayHlerp*)(pVmNode->Hlperdataoffset + m_Dlllpbase);
 
 	// Vm执行代码
-	for (int i = 0; i < pVmNode->Vmencodeasmlen; ++i)
+	for (size_t i = 0; i < pVmNode->Vmencodeasmlen; ++i)
 	{
 		if (!Hlerp)
 			break;
@@ -1016,11 +1019,14 @@ int VmStart(PVOID64 Vmcodeaddr)
 }
 
 // unit test.
-void WINAPI vmentry()
+void WINAPI VmEntry()
 {
-	// 1. 使用全局变量保存加密地址列表,地址被读取-虚拟机执行。
-	// 2. 正常虚拟机会有一套类似于断点 eip == VmcodeAddr，控制eip转换到虚拟机执行。
-	// 3. 示例是一次性虚拟机,也就是对壳main函数全VMcode加密。
+	/*
+		1. 使用全局变量保存加密地址列表,地址被读取-虚拟机执行.
+		2. 正常虚拟机会有一套类似于断点 eip == VmcodeAddr，控制eip转换到虚拟机执行.
+		3. 示例是一次性虚拟机,也就是对壳main函数全VMcode加密.
+	*/
+
 	puGetModule(0x228C4218, &g_stud.s_Krenel32);
 	MyLoadLibraryExA = (FnLoadLibraryExA)puGetProcAddress(g_stud.s_Krenel32, 0xC0D83287);
 	// msvcrt.dll
@@ -1053,10 +1059,10 @@ void WINAPI vmentry()
 		// 未进行VM加密,执行壳代码
 		if (!g_VmNode.VmCount)
 		{
-			main();
+			CombatShellEntry();
 			return;
 		}
-		for (int index = 0; index < g_VmNode.VmCount; ++index)
+		for (size_t index = 0; index < g_VmNode.VmCount; ++index)
 		{
 			// Vmnode = { 0, };
 			// 文件中记录的是偏移offset + m_Dlllpbase = RVA

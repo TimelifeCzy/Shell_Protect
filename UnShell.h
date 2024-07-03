@@ -1,6 +1,4 @@
 #pragma once
-#ifndef UNSHELL_H_
-#define UNSHELL_H_
 #include "stdafx.h"
 
 class UnShell
@@ -10,11 +8,13 @@ public:
 	~UnShell();
 
 public:
+	BOOL puUnShell() { return this->UnShellEx(); }
 	BOOL puRepCompressionData(){ return this->RepCompressionData(); }
 	BOOL puDeleteSectionInfo(){ return this->DeleteSectionInfo(); }
 	BOOL puSaveUnShell(){ return this->SaveUnShell(); }
 
 private:
+	BOOL UnShellEx();
 	BOOL RepCompressionData();
 	BOOL DeleteSectionInfo();
 	BOOL SaveUnShell();
@@ -33,4 +33,4 @@ private:
 	FILE *fpFile = nullptr;
 };
 
-#endif
+using SingleUnShell = ustdex::Singleton<UnShell>;

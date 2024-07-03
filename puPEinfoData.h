@@ -1,23 +1,26 @@
 #pragma once
-#include "stdafx.h"
 #ifndef PUPEINFODATA_H_
 #define PUPEINFODATA_H_
 
 /*
 	类名称：PuPeInfo
-	类用途：	公共接口类，提供可执行文件的PE信息
+	类用途：公共接口类，提供可执行文件的PE信息
 	时间：	2018-11-29
 */
 class PuPEInfo
 {
 public:
 	PuPEInfo();
-
 	~PuPEInfo();
 	
 	/*公开接口*/
 public:
-	void* puGetImageBase(){ return m_pFileBase; }
+
+	const bool puGetLoadFileSuccess() { return m_bLoadFileSuc; }
+
+	void* puGetImageBase(){ 
+		return m_pFileBase;
+	}
 
 	void* puGetNtHeadre(){ return m_pNtHeader; }
 
@@ -26,6 +29,8 @@ public:
 	DWORD puFileSize(){ return m_FileSize; }
 
 	BOOL puOpenFileLoad(const CString & PathName){ return prOpenFile(PathName); }
+	
+	BOOL puOpenFileLoadEx(const CString& PathName) { return prOpenFileEx(PathName); }
 
 	BOOL puIsPEFile(){ return IsPEFile(); }
 
@@ -33,7 +38,9 @@ public:
 
 	CString puFilePath(){ return m_strNamePath; }
 
-	HANDLE puFileHandle() { return m_hFileHandle; }
+	HANDLE puFileHandle() {
+		return m_hFileHandle; 
+	}
 
 	DWORD64 puOldOep(){ return this->m_OldOEP; }
 
@@ -48,10 +55,12 @@ public:
 	}
 
 
-	/*私有方法及数据*/
 private:
 	// 文件读取
 	BOOL prOpenFile(const CString & PathName);
+
+	// 刷新文件数据
+	BOOL prOpenFileEx(const CString& PathName);
 
 	// PE文件判断
 	BOOL IsPEFile();
@@ -65,33 +74,37 @@ private:
 	// 设置文件偏移以及文件大小
 	BOOL SetFileoffsetAndFileSize(const void* Base, const DWORD & offset, const DWORD size, const BYTE* Name);
 
+public:
 	// 保存ImageBase
-	static void* m_pFileBase;
+	void* m_pFileBase = nullptr;
 
 	// 保存PE头
-	static void* m_pNtHeader;
+	void* m_pNtHeader = nullptr;
 
 	// 保存Section
-	static void* m_SectionHeader;
+	void* m_SectionHeader = nullptr;
 
 	// 保存文件大小
-	static DWORD m_FileSize;
+	DWORD m_FileSize = 0;
 
 	// 保存文件路径
-	static CString m_strNamePath;
+	CString m_strNamePath;
 
 	// 保存文件句柄
-	static HANDLE m_hFileHandle;
+	HANDLE m_hFileHandle = nullptr;
 
 	// 保存原始OEP
-	static DWORD m_OldOEP;
+	DWORD m_OldOEP = 0;
 
 	// 保存区段个数
-	static int	m_SectionCount;
+	int	m_SectionCount = 0;
 
 	// 标记原始OEP
-	static BOOL OepFlag;
+	BOOL OepFlag = FALSE;
 
+	bool m_bLoadFileSuc = false;
 };
 
 #endif
+
+using SinglePuPEInfo = ustdex::Singleton<PuPEInfo>;

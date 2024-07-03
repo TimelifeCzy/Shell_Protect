@@ -1,32 +1,21 @@
-﻿#include "puPEinfoData.h"
-
-
-void* PuPEInfo::m_pFileBase = nullptr;
-
-void* PuPEInfo::m_pNtHeader = nullptr;
-
-void* PuPEInfo::m_SectionHeader = nullptr;
-
-DWORD PuPEInfo::m_FileSize = 0;
-
-CString PuPEInfo::m_strNamePath;
-
-HANDLE PuPEInfo::m_hFileHandle = nullptr;
-
-DWORD PuPEInfo::m_OldOEP = 0;
-
-int	PuPEInfo::m_SectionCount = 0;
-
-BOOL PuPEInfo::OepFlag = FALSE;
+﻿#include "stdafx.h"
+#include "puPEinfoData.h"
 
 PuPEInfo::PuPEInfo()
 {
-
+	m_bLoadFileSuc = false;
+	m_hFileHandle = NULL;
 }
 
 PuPEInfo::~PuPEInfo()
 {
-
+	if (m_pFileBase) {
+		free(m_pFileBase);
+		m_pFileBase = nullptr;
+	}
+	if (m_hFileHandle)
+		CloseHandle(m_hFileHandle);
+	m_bLoadFileSuc = false;
 }
 
 BOOL PuPEInfo::IsPEFile()
@@ -41,54 +30,68 @@ BOOL PuPEInfo::IsPEFile()
 BOOL PuPEInfo::prOpenFile(const CString & PathName)
 {
 	m_strNamePath = PathName;
+	if (m_strNamePath.IsEmpty())
+		return false;
 
 	HANDLE hFile = CreateFile(PathName, GENERIC_READ | GENERIC_WRITE, FALSE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-	
 	if ((int)hFile <= 0){ 
 		AfxMessageBox(L"打开文件失败"); 
 		return FALSE; 
 	}
 
 	m_hFileHandle = hFile;
-
 	DWORD dwSize = GetFileSize(hFile, NULL);
-
-	PuPEInfo::m_FileSize = dwSize;
+	m_FileSize = dwSize;
 	
-	PuPEInfo::m_pFileBase = (void *)malloc(dwSize);
-	
-	memset(PuPEInfo::m_pFileBase, 0, dwSize);
+	m_pFileBase = (void *)malloc(dwSize);
+	if (!m_pFileBase)
+		return false;
+	memset(m_pFileBase, 0, dwSize);
 	
 	DWORD dwRead = 0;
-	
 	OVERLAPPED OverLapped = { 0 };
+	int nRetCode = ReadFile(hFile, m_pFileBase, dwSize, &dwRead, &OverLapped);
 	
-	int nRetCode = 	ReadFile(hFile, PuPEInfo::m_pFileBase, dwSize, &dwRead, &OverLapped);
-	
-	PIMAGE_DOS_HEADER pDosHander = (PIMAGE_DOS_HEADER)PuPEInfo::m_pFileBase;
-
+	PIMAGE_DOS_HEADER pDosHander = (PIMAGE_DOS_HEADER)m_pFileBase;
 #ifdef _WIN64
 	PIMAGE_NT_HEADERS pHeadres = (PIMAGE_NT_HEADERS)(pDosHander->e_lfanew + (DWORD64)m_pFileBase);
 #else
 	PIMAGE_NT_HEADERS pHeadres = (PIMAGE_NT_HEADERS)(pDosHander->e_lfanew + (LONG)m_pFileBase);
 #endif
-	PuPEInfo::m_pNtHeader = (void *)pHeadres;
-
+	m_pNtHeader = (void *)pHeadres;
 	if (PuPEInfo::OepFlag == FALSE)
 	{
 		m_OldOEP = pHeadres->OptionalHeader.AddressOfEntryPoint;
-		PuPEInfo::OepFlag = TRUE;
+		OepFlag = TRUE;
 	}
 
 	m_SectionCount = pHeadres->FileHeader.NumberOfSections;
-	
-	if (!IsPEFile()){ free(m_pFileBase); PuPEInfo::m_pFileBase = nullptr; AfxMessageBox(L"非PE文件"); return FALSE; }
+	if (!IsPEFile()){ 
+		free(m_pFileBase); 
+		m_pFileBase = nullptr; 
+		AfxMessageBox(L"非PE文件"); return FALSE; 
+	}
 
-	PIMAGE_SECTION_HEADER pSection = IMAGE_FIRST_SECTION((PIMAGE_NT_HEADERS)PuPEInfo::m_pNtHeader);
-
-	PuPEInfo::m_SectionHeader = (void *)pSection;
-
+	PIMAGE_SECTION_HEADER pSection = IMAGE_FIRST_SECTION((PIMAGE_NT_HEADERS)m_pNtHeader);
+	m_SectionHeader = (void *)pSection;
+	m_bLoadFileSuc = true;
 	return TRUE;
+}
+
+BOOL PuPEInfo::prOpenFileEx(const CString& PathName) {
+	// clear
+	if (m_pFileBase) {
+		free(m_pFileBase);
+		m_pFileBase = nullptr;
+	}
+	if (m_hFileHandle) {
+		CloseHandle(m_hFileHandle);
+		m_hFileHandle = nullptr;
+	}
+	m_bLoadFileSuc = false;
+
+	// reload
+	return prOpenFile(PathName);
 }
 
 // RVAofFOA
@@ -125,7 +128,6 @@ PIMAGE_SECTION_HEADER PuPEInfo::GetSectionAddress(const char* Base, const BYTE* 
 	return 0;
 }
 
-// ÉèÖÃÎÄ¼þÆ«ÒÆÒÔ¼°ÎÄ¼þ´óÐ¡
 BOOL PuPEInfo::SetFileoffsetAndFileSize(const void* Base, const DWORD & offset, const DWORD size, const BYTE* Name)
 {
 	 PIMAGE_SECTION_HEADER Address = GetSectionAddress((char*)Base, Name);

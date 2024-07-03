@@ -46,6 +46,9 @@
     <Filter Include="Tool">
       <UniqueIdentifier>{10c9bdb2-06b3-4efc-bea2-1f48994e0650}</UniqueIdentifier>
     </Filter>
+    <Filter Include="asm">
+      <UniqueIdentifier>{3cafb444-22ba-4344-919b-54a02caae0c0}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AddSection.h">
@@ -95,6 +98,9 @@
     </ClInclude>
     <ClInclude Include="CodeTool.h">
       <Filter>Tool</Filter>
+    </ClInclude>
+    <ClInclude Include="SingletonHandler.h">
+      <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -156,13 +162,13 @@
     </Image>
   </ItemGroup>
   <ItemGroup>
-    <MASM Include="x64.asm">
-      <Filter>Add Section</Filter>
-    </MASM>
-  </ItemGroup>
-  <ItemGroup>
     <ResourceCompile Include="CombatShellManage.rc">
       <Filter>资源文件</Filter>
     </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <MASM Include="x64.asm">
+      <Filter>asm</Filter>
+    </MASM>
   </ItemGroup>
 </Project>

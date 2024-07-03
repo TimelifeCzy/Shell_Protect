@@ -1,54 +1,69 @@
-﻿#include "studData.h"
-#include "Stud\Stud.h"
+﻿#include "stdafx.h"
+#include "studData.h"
+#include "CombatShell/CombatShell.h"
 #include "puPEinfoData.h"
 #include "CompressionData.h"
 
-PuPEInfo obj_pePe;
+#define NEWSECITONNAME ".VMP"
+
 extern _Stud* g_stu;
 extern char g_filenameonly[MAX_PATH];
 
-#define NEWSECITONNAME ".VMP"
-
 studData::studData()
 {
-	m_lpBase = obj_pePe.puGetImageBase();
-
-#ifdef _WIN64
-	m_dwNewSectionAddress64 = (DWORD64)obj_pePe.puGetSectionAddress((char *)m_lpBase, (BYTE *)".VMP");
-#else
-	m_dwNewSectionAddress = (DWORD)obj_pePe.puGetSectionAddress((char *)m_lpBase, (BYTE *)".VMP");
-#endif
-
-
-	m_Oep = obj_pePe.puOldOep();
 }
 
 studData::~studData()
 {
-
+	try
+	{
+	}
+	catch (const std::exception&)
+	{
+	}
 } 
+
+BOOL studData::InitStuData() {
+	try
+	{
+		if (!SinglePuPEInfo::instance()->puOpenFileLoadEx(m_MasterFilePath))
+			return false;
+
+		m_lpBase = SinglePuPEInfo::instance()->puGetImageBase();
+#ifdef _WIN64
+		m_dwNewSectionAddress64 = (DWORD64)SinglePuPEInfo::instance()->puGetSectionAddress((char*)m_lpBase, (BYTE*)NEWSECITONNAME);
+#else
+		m_dwNewSectionAddress = (DWORD)pPeObj->puGetSectionAddress((char*)m_lpBase, (BYTE*)NEWSECITONNAME);
+#endif
+		m_Oep = SinglePuPEInfo::instance()->puOldOep();
+	}
+	catch (const std::exception&)
+	{
+		return false;
+	}
+	return true;
+}
 
 // Stud热身
 BOOL studData::LoadLibraryStud()
 {
 	CompressionData obj_compress;
-
 	m_studBase = obj_compress.puGetStubBase();
 	// 获取dll的导出函数
 #ifdef _WIN64
-	dexportAddress = GetProcAddress((HMODULE)m_studBase, "vmentry");
+	dexportAddress = GetProcAddress((HMODULE)m_studBase, "VmEntry");
 #else
-	dexportAddress = GetProcAddress((HMODULE)m_studBase, "main");
+	dexportAddress = GetProcAddress((HMODULE)m_studBase, "CombatShellEntry");
 #endif
 	// ImageBase
 #ifdef _WIN64
-	m_dwStudSectionAddress64 = (DWORD64)obj_pePe.puGetSectionAddress((char *)m_studBase, (BYTE *)".text");
-	m_dwNewSectionAddress64 = (DWORD64)obj_pePe.puGetSectionAddress((char *)m_lpBase, (BYTE *)".VMP");
-	m_ImageBase64 = ((PIMAGE_NT_HEADERS)obj_pePe.puGetNtHeadre())->OptionalHeader.ImageBase;
+	m_dwStudSectionAddress64 = (DWORD64)SinglePuPEInfo::instance()->puGetSectionAddress((char *)m_studBase, (BYTE *)".text");
+	m_dwNewSectionAddress64 = (DWORD64)SinglePuPEInfo::instance()->puGetSectionAddress((char *)m_lpBase, (BYTE *)NEWSECITONNAME);
+	m_ImageBase64 = ((PIMAGE_NT_HEADERS)SinglePuPEInfo::instance()->puGetNtHeadre())->OptionalHeader.ImageBase;
 #else
-	m_dwStudSectionAddress = (DWORD)obj_pePe.puGetSectionAddress((char *)m_studBase, (BYTE *)".text");
-	m_dwNewSectionAddress = (DWORD)obj_pePe.puGetSectionAddress((char *)m_lpBase, (BYTE *)".VMP");
-	m_ImageBase = ((PIMAGE_NT_HEADERS)obj_pePe.puGetNtHeadre())->OptionalHeader.ImageBase;
+	m_dwStudSectionAddress = (DWORD)pPeObj->puGetSectionAddress((char *)m_studBase, (BYTE *)".text");
+	m_dwNewSectionAddress = (DWORD)pPeObj->puGetSectionAddress((char *)m_lpBase, (BYTE *)NEWSECITONNAME);
+	m_ImageBase = ((PIMAGE_NT_HEADERS)pPeObj->puGetNtHeadre())->OptionalHeader.ImageBase;
 #endif // _WIN64
 
 	return TRUE;
@@ -117,19 +132,18 @@ BOOL studData::RepairReloCationStud()
 BOOL studData::CopyStud()
 {
 	g_stu->s_dwOepBase = m_Oep;
-
 	FILE* fpFile = nullptr;
-
-	if ((fpFile = fopen(g_filenameonly, "ab+")) == NULL)
+	if ((fpFile = fopen(g_filenameonly, "ab+")) == NULL) {
+	
 		AfxMessageBox(L"文件打开失败");
+		return false;
+	}
 
 	fwrite(&m_Oep, sizeof(DWORD), 1, fpFile);
-
 	fclose(fpFile);
+	PIMAGE_SECTION_HEADER studSection = SinglePuPEInfo::instance()->puGetSectionAddress((char *)m_studBase, (BYTE *)".text");
 
-	PIMAGE_SECTION_HEADER studSection = obj_pePe.puGetSectionAddress((char *)m_studBase, (BYTE *)".text");
-
-	PIMAGE_SECTION_HEADER SurceBase = obj_pePe.puGetSectionAddress((char *)m_lpBase, (BYTE *)".VMP");
+	PIMAGE_SECTION_HEADER SurceBase = SinglePuPEInfo::instance()->puGetSectionAddress((char *)m_lpBase, (BYTE *)NEWSECITONNAME);
 
 #ifdef _WIN64
 	memcpy(
@@ -147,7 +161,7 @@ BOOL studData::CopyStud()
 
 	DWORD dwRiteFile = 0;	OVERLAPPED overLapped = { 0 };
 
-	PIMAGE_NT_HEADERS pNt = (PIMAGE_NT_HEADERS)obj_pePe.puGetNtHeadre();
+	PIMAGE_NT_HEADERS pNt = (PIMAGE_NT_HEADERS)SinglePuPEInfo::instance()->puGetNtHeadre();
 
 	// OEP地点
 #ifdef _WIN64
@@ -156,10 +170,8 @@ BOOL studData::CopyStud()
 	pNt->OptionalHeader.AddressOfEntryPoint = (DWORD)dexportAddress - (DWORD)m_studBase - studSection->VirtualAddress + SurceBase->VirtualAddress;
 #endif
 
-	int nRet = WriteFile(obj_pePe.puFileHandle(), obj_pePe.puGetImageBase(), obj_pePe.puFileSize(), &dwRiteFile, &overLapped);
-
+	int nRet = WriteFile(SinglePuPEInfo::instance()->puFileHandle(), SinglePuPEInfo::instance()->puGetImageBase(), SinglePuPEInfo::instance()->puFileSize(), &dwRiteFile, &overLapped);
 	if (!nRet)
 		return FALSE;
-
 	return TRUE;
 }

@@ -1,44 +1,56 @@
-﻿#include "CompressionData.h"
+﻿#include "stdafx.h"
+#include "CompressionData.h"
+#include "vm.h"
+#include "AddSection.h"
 #include "puPEinfoData.h"
-#include "Stud\Stud.h"
+#include "CombatShell/CombatShell.h"
 #include "lz4/include/lz4.h"
 #include "quick/quicklz.h"
-#include "AddSection.h"
-#include "vm.h"
+#include <io.h>
+
+#define NEWSECITONNAME ".VMP"
 
 FILE* fpVmFile = NULL;
-
-/*
-	Stub export
-*/
+// Stub export
 _Stud* g_stu = nullptr;
 _VmNode* g_Vm = nullptr;
 char* g_dataHlpers = nullptr;
 DWORD64 g_dataoffset = 0;
-
 extern char g_filenameonly[MAX_PATH];
-
-void* CompressionData::m_lpBase = nullptr;
-HANDLE CompressionData::m_studBase = nullptr;
 
 CompressionData::CompressionData()
 {
-	
-	PuPEInfo obj_peInfo;
-
-	m_lpBase = obj_peInfo.puGetImageBase();
-
-	m_SectionHeadre = obj_peInfo.puGetSection();
-
-	m_SectionCount = ((PIMAGE_NT_HEADERS)(obj_peInfo.puGetNtHeadre()))->FileHeader.NumberOfSections;
-
-	m_hFile = obj_peInfo.puFileHandle();
-
-	m_hFileSize = obj_peInfo.puFileSize();
 }
 
 CompressionData::~CompressionData()
 {
+	if (m_lpBase) {
+		free(m_lpBase);
+		m_lpBase = nullptr;
+	}
+	if (m_hFile) {
+		CloseHandle(m_hFile);
+		m_hFile = nullptr;
+	}
+}
+
+VOID CompressionData::ReFileInit()
+{
+	if (m_lpBase) {
+		free(m_lpBase);
+		m_lpBase = nullptr;
+	}
+	if (m_hFile) {
+		CloseHandle(m_hFile);
+		m_hFile = nullptr;
+	}
+	PuPEInfo obj_peInfo;
+	obj_peInfo.puOpenFileLoad(m_MasterStaticTextStr);
+	m_lpBase = obj_peInfo.puGetImageBase();
+	m_SectionHeadre = obj_peInfo.puGetSection();
+	m_SectionCount = ((PIMAGE_NT_HEADERS)(obj_peInfo.puGetNtHeadre()))->FileHeader.NumberOfSections;
+	m_hFile = obj_peInfo.puFileHandle();
+	m_hFileSize = obj_peInfo.puFileSize();
 }
 
 // 压缩区段之前 Vmencode
@@ -50,15 +62,17 @@ void CompressionData::VmcodeEntry(char* TargetCode, _Out_ int &CodeLength)
 	g_Vm->VmCount = vm_len;
 	// fwrite(&vm_len, sizeof(int), 1, fpVmFile);
 
-	VM vmobj;
-	PuPEInfo obj_pePe; DWORD64 Offset = 0;
+	DWORD64 Offset = 0;
 	// 获取VM的起始地址
-	DWORD64 Vmencodeaddr = (DWORD64)GetProcAddress((HMODULE)m_studBase, "main");
+	DWORD64 Vmencodeaddr = (DWORD64)GetProcAddress((HMODULE)m_studBase, "CombatShellEntry");
 	if (!Vmencodeaddr)
 		return;
+	PuPEInfo obj_pePe;
 	PIMAGE_SECTION_HEADER studSection = obj_pePe.puGetSectionAddress((char *)m_studBase, (BYTE *)".text");
-	PIMAGE_SECTION_HEADER SurceBase = obj_pePe.puGetSectionAddress((char *)m_lpBase, (BYTE *)".VMP");
+	PIMAGE_SECTION_HEADER SurceBase = obj_pePe.puGetSectionAddress((char *)m_lpBase, (BYTE *)NEWSECITONNAME);
 	PIMAGE_NT_HEADERS pNt = (PIMAGE_NT_HEADERS)obj_pePe.puGetNtHeadre();
+	if (!studSection || (!SurceBase) || (!pNt))
+		return;
 
 #ifdef _WIN64
 	Offset = (DWORD64)Vmencodeaddr - (DWORD64)m_studBase - studSection->VirtualAddress + SurceBase->VirtualAddress;
@@ -77,6 +91,7 @@ void CompressionData::VmcodeEntry(char* TargetCode, _Out_ int &CodeLength)
 	g_Vm->Vmencodeasmlen = vm_len;
 	// fwrite(&vm_len, sizeof(int), 1, fpVmFile);
 	// fflush(fpVmFile);
+	VM vmobj;
 	vmobj.VmEntry((PVOID64)Vmencodeaddr, vm_len);
 }
 
@@ -84,17 +99,13 @@ void CompressionData::VmcodeEntry(char* TargetCode, _Out_ int &CodeLength)
 void CompressionData::AddCompreDataSection(const DWORD & size)
 {
 	BYTE Name[] = ".UPX";
-
 	DWORD Compresdata = size;
 
 	AddSection obj_addSection;
-
+	obj_addSection.puInti(m_MasterStaticTextStr);
 	obj_addSection.puModifySectioNumber();
-
 	obj_addSection.puModifySectionInfo(Name, Compresdata);
-
 	obj_addSection.puModifySizeofImage();
-
 	obj_addSection.puAddNewSectionByData(Compresdata);
 }
 
@@ -114,26 +125,52 @@ BOOL CompressionData::EncryptionSectionData(
 // 压缩PE区段数据
 BOOL CompressionData::CompressSectionData()
 {
-	// 注意修复-改为程序Name_FileData.txt
-	if ((fpFile = fopen(g_filenameonly, "wb+")) == NULL)
+	CString csTmep;
+	std::string sTagetDirectory = "";
+	std::wstring wsTagetDirectory = L"";
 	{
-		AfxMessageBox(L"文件创建失败.");
+		csTmep = m_MasterStaticTextStr;
+		int n = csTmep.ReverseFind('\\') + 1;
+		int m = csTmep.GetLength() - n;
+		wsTagetDirectory = csTmep.Left(n);
+		csTmep = csTmep.Right(m);
+	}
+	if (strlen(g_filenameonly) <= 0) {
+		RtlSecureZeroMemory(g_filenameonly, 0);
+		DWORD dwNum = WideCharToMultiByte(CP_OEMCP, NULL, csTmep, -1, NULL, NULL, 0, NULL);
+		WideCharToMultiByte(CP_OEMCP, NULL, csTmep, -1, g_filenameonly, dwNum, 0, NULL);
+		if (strlen(g_filenameonly) > 0)
+			strcat(g_filenameonly, "_FileData.txt");
+		else
+		{
+			strcpy(g_filenameonly, "FileData.txt");
+			AfxMessageBox(L"转换文件名有问题");
+		}
+	}
+	sTagetDirectory = (CodeTool::wstring2string(wsTagetDirectory) + g_filenameonly).c_str();
+
+	std::string sDriectory = "";
+	std::string sCombatShellPath = "";
+	CodeTool::CGetCurrentDirectory(sDriectory);
+	if (!sDriectory.empty()) {
+		sCombatShellPath = (sDriectory + "CombatShell.dll").c_str();
+	}
+	if (sCombatShellPath.empty())
+		sCombatShellPath = "CombatShell.dll";
+	std::wstring wsCombatShellPath = CodeTool::string2wstring(sCombatShellPath.c_str()).c_str();
+	if (_access(sCombatShellPath.c_str(), 0) != 0) {
+		AfxMessageBox((L"CombatShell文件缺失. " + wsCombatShellPath).c_str());
 		return 0;
 	}
 
-	//if ((fpVmFile = fopen("VmCodeList.txt", "wb+")) == NULL)
-	//{
-	//	AfxMessageBox(L"Vmcode文件创建失败");
-	//}
-
 #ifdef _WIN64
-	m_studBase = LoadLibraryEx(L"Stud.dll", NULL, DONT_RESOLVE_DLL_REFERENCES);
+	m_studBase = LoadLibraryEx(wsCombatShellPath.c_str(), NULL, DONT_RESOLVE_DLL_REFERENCES);
 #else
-	m_studBase = LoadLibraryEx(L"Stud.dll", NULL, DONT_RESOLVE_DLL_REFERENCES);
+	m_studBase = LoadLibraryEx(wsCombatShellPath.c_str(), NULL, DONT_RESOLVE_DLL_REFERENCES);
 #endif
 	if (!m_studBase || (nullptr == m_studBase)) {
-		AfxMessageBox(L"Stud.dll加载失败.");
-		return 0;
+		AfxMessageBox((L"CombatShell LoadLibraryEx Error. " + wsCombatShellPath).c_str());
+		return false;
 	}
 
 	g_stu = (_Stud*)GetProcAddress((HMODULE)m_studBase, "g_stud");
@@ -143,7 +180,6 @@ BOOL CompressionData::CompressSectionData()
 		AfxMessageBox(L"Stud.dll GetProcAddress 失败.");
 		return 0;
 	}
-
 	g_stu->s_OneSectionSizeofData = FALSE;
 
 #ifdef _WIN64
@@ -158,12 +194,14 @@ BOOL CompressionData::CompressSectionData()
 #endif
 
 	DWORD dSectionCount = pNt->FileHeader.NumberOfSections;
-
 	PIMAGE_SECTION_HEADER psection = (PIMAGE_SECTION_HEADER)m_SectionHeadre;
 
 	PuPEInfo obj_peInfo;
-
-	m_maskAddress = obj_peInfo.puGetSectionAddress((char *)m_lpBase, (BYTE *)".VMP");
+	m_maskAddress = obj_peInfo.puGetSectionAddress((char *)m_lpBase, (BYTE *)NEWSECITONNAME);
+	if (!m_maskAddress) {
+		AfxMessageBox(L".VMP 区别识别失败!\n");
+		return false;
+	}
 
 	// 避免如.textbss无数据
 	for (DWORD i = 0; i < dSectionCount; ++i)
@@ -177,13 +215,18 @@ BOOL CompressionData::CompressSectionData()
 	DWORD pStandardHeadersize = psection->PointerToRawData;
 
 	char* SaveCompressData = (char*)malloc(m_hFileSize);
-
+	if (!SaveCompressData)
+		return false;
 	memset(SaveCompressData, 0, m_hFileSize);
 
 	PIMAGE_SECTION_HEADER pSections = (PIMAGE_SECTION_HEADER)m_SectionHeadre;
-
 	DWORD ComressTotalSize = 0;
-
+	// 注意修复-改为程序Name_FileData.txt
+	if ((fpFile = fopen(sTagetDirectory.c_str(), "wb+")) == NULL)
+	{
+		AfxMessageBox(L"CombatShell 打开创建失败.");
+		return false;
+	}
 	// 不压缩新增的区段（加壳区段）
 	for (DWORD i = 0; i < dSectionCount - 2; ++i)
 	{
@@ -264,6 +307,8 @@ BOOL CompressionData::CompressSectionData()
 
 		++pSections;
 	}
+	if (fpFile)
+		fclose(fpFile);
 
 	// 0x400 + (压缩后的大小 / 0x200 + ----压缩后的大小 % 0x200 ? 1 : 0) 0x200;
 	// 对齐数据
@@ -286,13 +331,9 @@ BOOL CompressionData::CompressSectionData()
 
 	// 重新加载个中PE数据保证下面数据获取最新
 	PuPEInfo obj_Peinfo;
-
 	CloseHandle(obj_Peinfo.puFileHandle());
-
 	FileName = obj_peInfo.puFilePath();
-
 	obj_Peinfo.puOpenFileLoad(FileName);
-
 	CompressionData obj_Compre;
 	// 修改新区段的信息数据 文件偏移 0x400  大小 压缩后数据对齐大小
 	BYTE Name[] = ".UPX";
@@ -336,27 +377,14 @@ BOOL CompressionData::CompressSectionData()
 	// 清空数据目录表(收尾工作)
 	CleanDirectData(ComressNewBase, ComressTotalSize, Size);
 
-	// 创建文件
-	HANDLE Handle = CreateFile(L"MaskCompre.exe", GENERIC_READ | GENERIC_WRITE, FALSE, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-
-	// 写入exe程序完成压缩
-	int nRet = WriteFile(Handle, ComressNewBase, (Size + m_maskAddress->SizeOfRawData), &dwWrite, &OverLapped);
+	// Create File
+	std::wstring wsMaskCompre = (wsTagetDirectory + L"CompressionMask.exe").c_str();
+	HANDLE HandComprele = CreateFile(wsMaskCompre.c_str(), GENERIC_READ | GENERIC_WRITE, FALSE, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+	// Write Exe 完成压缩
+	int nRet = WriteFile(HandComprele, ComressNewBase, (Size + m_maskAddress->SizeOfRawData), &dwWrite, &OverLapped);
+	CloseHandle(HandComprele);
 	if (!nRet)
 		AfxMessageBox(L"CompressWriteFile failuer");
-
-	// 关闭句柄
-	CloseHandle(Handle);
-	
-	// 拷贝到文件路径下
-	nRet = CopyFile(L"MaskCompre.exe", L"C:\\Users\\CompressionMask.exe", FALSE);
-
-	if (!nRet)
-		AfxMessageBox(L"CopyFile failure");
-
-	DeleteFile(L"MaskCompre.exe");
-
-	fclose(fpFile);
-
 	return TRUE;
 }
 
@@ -378,6 +406,7 @@ BOOL CompressionData::CleanDirectData(const char* NewAddress, const DWORD & Comp
 	if ((fpFile = fopen(g_filenameonly, "ab+")) == NULL)
 	{
 		AfxMessageBox(L"文件打开失败");
+		return false;
 	}
 #ifdef _WIN64
 	PIMAGE_NT_HEADERS pNt = (PIMAGE_NT_HEADERS)(((PIMAGE_DOS_HEADER)NewAddress)->e_lfanew + (DWORD64)NewAddress);

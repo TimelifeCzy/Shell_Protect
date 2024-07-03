@@ -6,6 +6,9 @@ MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CombatShell", "CombatShell\CombatShell.vcxproj", "{DDA1CDD8-B00B-4830-A103-371D2B91399B}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CombatShellManage", "CombatShellManage.vcxproj", "{03AEDF10-24E0-420D-AD89-B186018CCE0E}"
+	ProjectSection(ProjectDependencies) = postProject
+		{DDA1CDD8-B00B-4830-A103-371D2B91399B} = {DDA1CDD8-B00B-4830-A103-371D2B91399B}
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

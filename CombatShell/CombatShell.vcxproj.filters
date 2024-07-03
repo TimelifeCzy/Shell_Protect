@@ -62,15 +62,18 @@
     <ClCompile Include="CombatShell.cpp">
       <Filter>CombatShell</Filter>
     </ClCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="x64.asm">
-      <Filter>asm</Filter>
-    </None>
+    <ClCompile Include="..\quick\quicklz.c">
+      <Filter>quick</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="CombatShell.rc">
       <Filter>资源文件</Filter>
     </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <MASM Include="x64.asm">
+      <Filter>asm</Filter>
+    </MASM>
   </ItemGroup>
 </Project>

@@ -140,8 +140,6 @@ typedef struct _PRT
 			// g_stud.msvcr = (DWORD64)MyLoadLibraryExA("msvcr100.dll", NULL, NULL);
 */
 
-static TCHAR szWindowClass[] = TEXT("ZhuDongFangYu");
-
 typedef void* (WINAPI* FnGetProcAddress)(HMODULE, const char*);
 typedef HMODULE(WINAPI* FnLoadLibraryExA)(_In_ LPCSTR lpLibFileName, _Reserved_ HANDLE hFile, _In_ DWORD dwFlags);
 typedef HMODULE(WINAPI* FnGetModuleHandleW)(_In_opt_ LPCWSTR lpModuleName);

@@ -1,16 +1,10 @@
 #pragma once
-#ifndef STUDDATA_H_
-#define STUDDATA_H_
-#include "stdafx.h"
-
-
 /*
 	类名称：studData
 	用途：stud数据相关操作
 	时间：2018/12/1
 	修改日期：2018/12/2
 */
-
 
 class studData
 {
@@ -19,18 +13,18 @@ public:
 	~studData();
 
 public:
+	BOOL puInit(CString csFilePath) { 
+		m_MasterFilePath = csFilePath.GetString();
+		return this->InitStuData();
+	}
 	void puLoadLibraryStud(){ this->LoadLibraryStud(); }
-
 	void puRepairReloCationStud(){ this->RepairReloCationStud(); }
-
 	BOOL puCopyStud(){ return this->CopyStud(); }
 
 private:
-
+	BOOL InitStuData();
  	BOOL LoadLibraryStud();
-
 	BOOL RepairReloCationStud();
-
 	BOOL CopyStud();
 
 private:
@@ -52,6 +46,8 @@ private:
 
 	DWORD m_ImageBase = 0;
 	DWORD64 m_ImageBase64 = 0;
+
+	CString m_MasterFilePath;
 };
 
-#endif
+using SingleStudData = ustdex::Singleton<studData>;
