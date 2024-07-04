@@ -26,14 +26,7 @@ AddSection::~AddSection()
 }
 
 BOOL AddSection::Init() {
-	if (pFileBaseData) {
-		free(pFileBaseData);
-		pFileBaseData = nullptr;
-	}
-	if (FileHandle) {
-		CloseHandle(FileHandle);
-		FileHandle = nullptr;
-	}
+	Free();
 
 	SinglePuPEInfo::instance()->puOpenFileLoadEx(m_FilePath);
 	pFileBaseData = SinglePuPEInfo::instance()->puGetImageBase();
@@ -45,17 +38,35 @@ BOOL AddSection::Init() {
 	return true;
 }
 
+BOOL AddSection::Free() {
+	SinglePuPEInfo::instance()->puClearPeData();
+	if (pFileBaseData) {
+		pFileBaseData = nullptr;
+	}
+	if (FileHandle) {
+		FileHandle = nullptr;
+	}
+	if (m_newlpBase) {
+		free(m_newlpBase);
+		m_newlpBase = nullptr;
+	}
+	pNtHeadre = nullptr;
+	pSectionHeadre = nullptr;
+	SectionSizeof = 0;
+	FileSize = 0;
+	return true;
+}
+
 BOOL AddSection::ModifySectionNumber()
 {
 	PIMAGE_NT_HEADERS pNtHeaders = (PIMAGE_NT_HEADERS)this->pNtHeadre;
-
-	DWORD temp = pNtHeaders->FileHeader.NumberOfSections;
-
-	SectionSizeof = temp * 0x28;
-
-	pNtHeaders->FileHeader.NumberOfSections += 0x1;
-
-	return TRUE;
+	if (pNtHeaders) {
+		DWORD temp = pNtHeaders->FileHeader.NumberOfSections;
+		SectionSizeof = temp * 0x28;
+		pNtHeaders->FileHeader.NumberOfSections += 0x1;
+		return TRUE;
+	}
+	return false;
 }
 
 BOOL AddSection::ModifySectionInfo(const BYTE* Name, const DWORD & size)
@@ -66,19 +77,20 @@ BOOL AddSection::ModifySectionInfo(const BYTE* Name, const DWORD & size)
 	DWORD pSectionAddress = (DWORD)pSectionHeadre;
 #endif
 	pSectionAddress = pSectionAddress + SectionSizeof - 0x28;
-
 	PIMAGE_SECTION_HEADER PtrpSection = (PIMAGE_SECTION_HEADER)pSectionAddress;
+	if (!PtrpSection)
+		return false;
 
 	pSectionAddress += 0x28;
 	NewpSection = (PIMAGE_SECTION_HEADER)pSectionAddress;
-	
 	memcpy(NewpSection->Name, Name, sizeof(Name));
 	DWORD dwtemps = PtrpSection->VirtualAddress + PtrpSection->SizeOfRawData;
+	if (!dwtemps)
+		return false;
 
 	DWORD Temp = 0;
-
 #ifdef _WIN64
-	// x64下使用，因为不涉及__int64类型，所以汇编使用同一套即可
+	// x64下使用，不涉及__int64类型，汇编使用同一套即可
 	AsmCountTemp(&dwtemps);
 	NewpSection->VirtualAddress = dwtemps;
 	Temp = PtrpSection->SizeOfRawData + PtrpSection->PointerToRawData;
@@ -140,21 +152,22 @@ BOOL AddSection::ModifySectionInfo(const BYTE* Name, const DWORD & size)
 BOOL AddSection::ModifyProgramEntryPoint()
 {
 	PIMAGE_NT_HEADERS pNt = (PIMAGE_NT_HEADERS)pNtHeadre;
-
-	pNt->OptionalHeader.AddressOfEntryPoint = NewpSection->VirtualAddress;
-
-	return TRUE;
+	if (pNt) {
+		pNt->OptionalHeader.AddressOfEntryPoint = NewpSection->VirtualAddress;
+		return TRUE;
+	}
+	return false;
 }
 
 BOOL AddSection::ModifySizeofImage()
 {
 	PIMAGE_NT_HEADERS pNt = (PIMAGE_NT_HEADERS)pNtHeadre;
-
-	pNt->OptionalHeader.SizeOfImage = NewpSection->VirtualAddress + NewpSection->SizeOfRawData;
-	
-	pNt->OptionalHeader.DllCharacteristics = 0x8000;
-	
-	return TRUE;
+	if (pNt) {
+		pNt->OptionalHeader.SizeOfImage = NewpSection->VirtualAddress + NewpSection->SizeOfRawData;
+		pNt->OptionalHeader.DllCharacteristics = 0x8000;
+		return TRUE;
+	}
+	return FALSE;
 }
 
 BOOL AddSection::AddNewSectionByteData(const DWORD & size)
@@ -167,16 +180,12 @@ BOOL AddSection::AddNewSectionByteData(const DWORD & size)
 
 	if (pFileBaseData) {
 		memcpy(m_newlpBase, pFileBaseData, FileSize);
-		free(pFileBaseData);
-		pFileBaseData = nullptr;
 	}
 	else
 		return false;
 
 	DWORD dWriteSize = 0; OVERLAPPED OverLapped = { 0 };
 	int nRetCode = WriteFile(FileHandle, m_newlpBase, (FileSize + size), &dWriteSize, &OverLapped);
-	CloseHandle(FileHandle); 
-	FileHandle = nullptr;
 	if (m_newlpBase) {
 		free(m_newlpBase);
 		m_newlpBase = nullptr;

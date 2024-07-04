@@ -44,9 +44,14 @@ void SectionInfo::InitSectionData()
 	for (int i = 0; i < 6; ++i) { m_SectionList.InsertColumn(i, strName[i], LVCFMT_CENTER, nWidth / 6); }
 
 	pSectionHeadre = { 0 };	pNtHeadre = { 0 };
-	if (!SinglePuPEInfo::instance()->puGetLoadFileSuccess()) {
-		if (!m_csFilePath.IsEmpty())
-			return;
+	if(!m_csFilePath.IsEmpty())
+		SinglePuPEInfo::instance()->puOpenFileLoadEx(m_csFilePath);
+	else
+	{
+		if (!SinglePuPEInfo::instance()->puGetLoadFileSuccess()) {
+			if (!m_csFilePath.IsEmpty())
+				return;
+		}
 		SinglePuPEInfo::instance()->puOpenFileLoadEx(m_csFilePath);
 	}
 	pSectionHeadre = (PIMAGE_SECTION_HEADER)SinglePuPEInfo::instance()->puGetSection();
@@ -55,39 +60,51 @@ void SectionInfo::InitSectionData()
 	if (!pSectionHeadre || (!pNtHeadre) || (SectionCount <= 0))
 		return;
 	ShowSectionInfo();
+	// Clear
+	SinglePuPEInfo::instance()->puClearPeData();
 }
 
 void SectionInfo::ShowSectionInfo()
 { 
+	if (!m_SectionList || (SectionCount <= 0))
+		return;
 	PIMAGE_SECTION_HEADER tempSectionHeadre = pSectionHeadre;
+	if (!tempSectionHeadre)
+		return;
+
 	DWORD dwTemp = 0;	CString str;
-	for (DWORD i = 0; i < SectionCount; ++i)
+	try
 	{
+		for (DWORD i = 0; i < SectionCount; ++i)
+		{
+			m_SectionList.InsertItem(i, NULL);
+			str = tempSectionHeadre->Name;
+			m_SectionList.SetItemText(i, 0, str);
 
-		m_SectionList.InsertItem(i, NULL);
-		str = tempSectionHeadre->Name;
-		m_SectionList.SetItemText(i, 0, str);
+			dwTemp = tempSectionHeadre->VirtualAddress;
+			str.Format(L"%08X", dwTemp);
+			m_SectionList.SetItemText(i, 1, str);
 
-		dwTemp = tempSectionHeadre->VirtualAddress;
-		str.Format(L"%08X", dwTemp);
-		m_SectionList.SetItemText(i, 1, str);
+			dwTemp = tempSectionHeadre->SizeOfRawData;
+			str.Format(L"%08X", dwTemp);
+			m_SectionList.SetItemText(i, 2, str);
 
-		dwTemp = tempSectionHeadre->SizeOfRawData;
-		str.Format(L"%08X", dwTemp);
-		m_SectionList.SetItemText(i, 2, str);
+			dwTemp = tempSectionHeadre->PointerToRawData;
+			str.Format(L"%08X", dwTemp);
+			m_SectionList.SetItemText(i, 3, str);
 
-		dwTemp = tempSectionHeadre->PointerToRawData;
-		str.Format(L"%08X", dwTemp);
-		m_SectionList.SetItemText(i, 3, str);
-		
-		dwTemp = tempSectionHeadre->Misc.VirtualSize;
-		str.Format(L"%08X", dwTemp);
-		m_SectionList.SetItemText(i, 4, str);
+			dwTemp = tempSectionHeadre->Misc.VirtualSize;
+			str.Format(L"%08X", dwTemp);
+			m_SectionList.SetItemText(i, 4, str);
 
-		dwTemp = tempSectionHeadre->Characteristics;
-		str.Format(L"%08X", dwTemp);
-		m_SectionList.SetItemText(i, 5, str);
+			dwTemp = tempSectionHeadre->Characteristics;
+			str.Format(L"%08X", dwTemp);
+			m_SectionList.SetItemText(i, 5, str);
 
-		++tempSectionHeadre;
+			++tempSectionHeadre;
+		}
+	}
+	catch (const std::exception&)
+	{
 	}
 }

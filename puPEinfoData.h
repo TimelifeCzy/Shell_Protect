@@ -32,6 +32,8 @@ public:
 	
 	BOOL puOpenFileLoadEx(const CString& PathName) { return prOpenFileEx(PathName); }
 
+	void puClearPeData();
+
 	BOOL puIsPEFile(){ return IsPEFile(); }
 
 	DWORD puRVAofFOA(const DWORD Rva){ return RVAofFOA(Rva); }

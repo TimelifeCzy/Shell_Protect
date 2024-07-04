@@ -349,7 +349,6 @@ DWORD puGetProcAddress(const DWORD dllvalues, const DWORD Hash)
 }
 #endif // _WIN32
 
-// Sheller_code
 void SetString(HWND hWnd)
 {
 	MyPostQuitMessage = (FnPostQuitMessage)puGetProcAddress(g_stud.s_User32, 0xCAA94781);
@@ -663,6 +662,7 @@ int CreateWind()
 	return 0;
 }
 
+// ShellCode Main
 void WINAPI CombatShellEntry()
 {
 #ifndef _WIN64
@@ -1018,7 +1018,7 @@ int VmStart(PVOID64 Vmcodeaddr)
 	return 1;
 }
 
-// unit test.
+// Unit Test.
 void WINAPI VmEntry()
 {
 	/*

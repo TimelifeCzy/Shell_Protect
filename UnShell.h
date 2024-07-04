@@ -12,7 +12,7 @@ public:
 	BOOL puRepCompressionData(){ return this->RepCompressionData(); }
 	BOOL puDeleteSectionInfo(){ return this->DeleteSectionInfo(); }
 	BOOL puSaveUnShell(){ return this->SaveUnShell(); }
-
+	const std::string puGetUnShellPath() { return m_sUnShellPath.c_str(); }
 private:
 	BOOL UnShellEx();
 	BOOL RepCompressionData();
@@ -31,6 +31,8 @@ private:
 	DWORD TotaldwSize = 0;
 	char* Sectionbuf = nullptr;
 	FILE *fpFile = nullptr;
+
+	std::string m_sUnShellPath = "";
 };
 
 using SingleUnShell = ustdex::Singleton<UnShell>;

@@ -21,6 +21,11 @@ public:
 		this->Init();
 	}
 
+	void puFree() {
+		m_FilePath.Empty();
+		this->Free();
+	}
+
 	void puModifySectioNumber(){ this->ModifySectionNumber(); }
 
 	void puModifyProgramEntryPoint(){ this->ModifyProgramEntryPoint(); }
@@ -38,6 +43,8 @@ public:
 
 private:
 	BOOL Init();
+
+	BOOL Free();
 
 	BOOL ModifySectionNumber();
 

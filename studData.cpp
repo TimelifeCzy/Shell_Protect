@@ -3,11 +3,12 @@
 #include "CombatShell/CombatShell.h"
 #include "puPEinfoData.h"
 #include "CompressionData.h"
+#include <io.h>
 
 #define NEWSECITONNAME ".VMP"
 
-extern _Stud* g_stu;
-extern char g_filenameonly[MAX_PATH];
+extern _Stud*	g_stu;
+extern char		g_CombatShellDataLocalFile[MAX_PATH];
 
 studData::studData()
 {
@@ -15,12 +16,6 @@ studData::studData()
 
 studData::~studData()
 {
-	try
-	{
-	}
-	catch (const std::exception&)
-	{
-	}
 } 
 
 BOOL studData::InitStuData() {
@@ -47,8 +42,28 @@ BOOL studData::InitStuData() {
 // Stud热身
 BOOL studData::LoadLibraryStud()
 {
-	CompressionData obj_compress;
-	m_studBase = obj_compress.puGetStubBase();
+	std::string sDriectory = "";
+	std::string sCombatShellPath = "";
+	CodeTool::CGetCurrentDirectory(sDriectory);
+	if (!sDriectory.empty()) {
+		sCombatShellPath = (sDriectory + "CombatShell.dll").c_str();
+	}
+	if (sCombatShellPath.empty())
+		sCombatShellPath = "CombatShell.dll";
+	std::wstring wsCombatShellPath = CodeTool::string2wstring(sCombatShellPath.c_str()).c_str();
+	if (_access(sCombatShellPath.c_str(), 0) != 0) {
+		AfxMessageBox((L"CombatShell文件缺失. " + wsCombatShellPath).c_str());
+		return 0;
+	}
+#ifdef _WIN64
+	m_studBase = LoadLibraryEx(wsCombatShellPath.c_str(), NULL, DONT_RESOLVE_DLL_REFERENCES);
+#else
+	m_studBase = LoadLibraryEx(wsCombatShellPath.c_str(), NULL, DONT_RESOLVE_DLL_REFERENCES);
+#endif
+	if (!m_studBase || (nullptr == m_studBase)) {
+		AfxMessageBox((L"CombatShell LoadLibraryEx Error. " + wsCombatShellPath).c_str());
+		return false;
+	}
 	// 获取dll的导出函数
 #ifdef _WIN64
 	dexportAddress = GetProcAddress((HMODULE)m_studBase, "VmEntry");
@@ -133,7 +148,7 @@ BOOL studData::CopyStud()
 {
 	g_stu->s_dwOepBase = m_Oep;
 	FILE* fpFile = nullptr;
-	if ((fpFile = fopen(g_filenameonly, "ab+")) == NULL) {
+	if ((fpFile = fopen(g_CombatShellDataLocalFile, "ab+")) == NULL) {
 	
 		AfxMessageBox(L"文件打开失败");
 		return false;
@@ -142,9 +157,9 @@ BOOL studData::CopyStud()
 	fwrite(&m_Oep, sizeof(DWORD), 1, fpFile);
 	fclose(fpFile);
 	PIMAGE_SECTION_HEADER studSection = SinglePuPEInfo::instance()->puGetSectionAddress((char *)m_studBase, (BYTE *)".text");
-
 	PIMAGE_SECTION_HEADER SurceBase = SinglePuPEInfo::instance()->puGetSectionAddress((char *)m_lpBase, (BYTE *)NEWSECITONNAME);
-
+	if (!studSection || (!SurceBase))
+		return false;
 #ifdef _WIN64
 	memcpy(
 		(void *)(SurceBase->PointerToRawData + (DWORD64)m_lpBase),
@@ -160,10 +175,11 @@ BOOL studData::CopyStud()
 #endif
 
 	DWORD dwRiteFile = 0;	OVERLAPPED overLapped = { 0 };
-
 	PIMAGE_NT_HEADERS pNt = (PIMAGE_NT_HEADERS)SinglePuPEInfo::instance()->puGetNtHeadre();
+	if (!pNt)
+		return false;
 
-	// OEP地点
+	// OEP
 #ifdef _WIN64
 	pNt->OptionalHeader.AddressOfEntryPoint = (DWORD64)dexportAddress - (DWORD64)m_studBase - studSection->VirtualAddress + SurceBase->VirtualAddress;
 #else
@@ -174,4 +190,16 @@ BOOL studData::CopyStud()
 	if (!nRet)
 		return FALSE;
 	return TRUE;
+}
+
+// Clear
+void studData::puClearStuData()
+{
+	SinglePuPEInfo::instance()->puClearPeData();
+	if (m_lpBase)
+		m_lpBase = nullptr;
+	if (m_studBase)
+		m_studBase = nullptr;
+	m_Oep = 0;
+	m_ImageBase = 0;
 }

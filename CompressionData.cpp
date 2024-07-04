@@ -10,13 +10,13 @@
 
 #define NEWSECITONNAME ".VMP"
 
-FILE* fpVmFile = NULL;
-// Stub export
-_Stud* g_stu = nullptr;
-_VmNode* g_Vm = nullptr;
-char* g_dataHlpers = nullptr;
-DWORD64 g_dataoffset = 0;
-extern char g_filenameonly[MAX_PATH];
+FILE*			fpVmFile = NULL;
+// CombatShell Export
+_Stud*			g_stu = nullptr;
+_VmNode*		g_Vm = nullptr;
+char*			g_dataHlpers = nullptr;
+DWORD64			g_dataoffset = 0;
+extern char		g_CombatShellDataLocalFile[MAX_PATH];
 
 CompressionData::CompressionData()
 {
@@ -25,32 +25,31 @@ CompressionData::CompressionData()
 CompressionData::~CompressionData()
 {
 	if (m_lpBase) {
-		free(m_lpBase);
 		m_lpBase = nullptr;
 	}
 	if (m_hFile) {
-		CloseHandle(m_hFile);
 		m_hFile = nullptr;
 	}
+	// clear
+	SinglePuPEInfo::instance()->puClearPeData();
 }
 
 VOID CompressionData::ReFileInit()
 {
 	if (m_lpBase) {
-		free(m_lpBase);
 		m_lpBase = nullptr;
 	}
 	if (m_hFile) {
-		CloseHandle(m_hFile);
 		m_hFile = nullptr;
 	}
-	PuPEInfo obj_peInfo;
-	obj_peInfo.puOpenFileLoad(m_MasterStaticTextStr);
-	m_lpBase = obj_peInfo.puGetImageBase();
-	m_SectionHeadre = obj_peInfo.puGetSection();
-	m_SectionCount = ((PIMAGE_NT_HEADERS)(obj_peInfo.puGetNtHeadre()))->FileHeader.NumberOfSections;
-	m_hFile = obj_peInfo.puFileHandle();
-	m_hFileSize = obj_peInfo.puFileSize();
+	SinglePuPEInfo::instance()->puClearPeData();
+
+	SinglePuPEInfo::instance()->puOpenFileLoadEx(m_MasterStaticTextStr);
+	m_lpBase = SinglePuPEInfo::instance()->puGetImageBase();
+	m_SectionHeadre = SinglePuPEInfo::instance()->puGetSection();
+	m_SectionCount = ((PIMAGE_NT_HEADERS)(SinglePuPEInfo::instance()->puGetNtHeadre()))->FileHeader.NumberOfSections;
+	m_hFile = SinglePuPEInfo::instance()->puFileHandle();
+	m_hFileSize = SinglePuPEInfo::instance()->puFileSize();
 }
 
 // 压缩区段之前 Vmencode
@@ -67,10 +66,9 @@ void CompressionData::VmcodeEntry(char* TargetCode, _Out_ int &CodeLength)
 	DWORD64 Vmencodeaddr = (DWORD64)GetProcAddress((HMODULE)m_studBase, "CombatShellEntry");
 	if (!Vmencodeaddr)
 		return;
-	PuPEInfo obj_pePe;
-	PIMAGE_SECTION_HEADER studSection = obj_pePe.puGetSectionAddress((char *)m_studBase, (BYTE *)".text");
-	PIMAGE_SECTION_HEADER SurceBase = obj_pePe.puGetSectionAddress((char *)m_lpBase, (BYTE *)NEWSECITONNAME);
-	PIMAGE_NT_HEADERS pNt = (PIMAGE_NT_HEADERS)obj_pePe.puGetNtHeadre();
+	PIMAGE_SECTION_HEADER studSection = SinglePuPEInfo::instance()->puGetSectionAddress((char *)m_studBase, (BYTE *)".text");
+	PIMAGE_SECTION_HEADER SurceBase = SinglePuPEInfo::instance()->puGetSectionAddress((char *)m_lpBase, (BYTE *)NEWSECITONNAME);
+	PIMAGE_NT_HEADERS pNt = (PIMAGE_NT_HEADERS)SinglePuPEInfo::instance()->puGetNtHeadre();
 	if (!studSection || (!SurceBase) || (!pNt))
 		return;
 
@@ -95,18 +93,18 @@ void CompressionData::VmcodeEntry(char* TargetCode, _Out_ int &CodeLength)
 	vmobj.VmEntry((PVOID64)Vmencodeaddr, vm_len);
 }
 
-// 添加一个区段给压缩后的数据使用
+// 添加区段给压缩后的数据使用
 void CompressionData::AddCompreDataSection(const DWORD & size)
 {
 	BYTE Name[] = ".UPX";
 	DWORD Compresdata = size;
 
-	AddSection obj_addSection;
-	obj_addSection.puInti(m_MasterStaticTextStr);
-	obj_addSection.puModifySectioNumber();
-	obj_addSection.puModifySectionInfo(Name, Compresdata);
-	obj_addSection.puModifySizeofImage();
-	obj_addSection.puAddNewSectionByData(Compresdata);
+	SingleAddSection::instance()->puInti(m_MasterStaticTextStr);
+	SingleAddSection::instance()->puModifySectioNumber();
+	SingleAddSection::instance()->puModifySectionInfo(Name, Compresdata);
+	SingleAddSection::instance()->puModifySizeofImage();
+	SingleAddSection::instance()->puAddNewSectionByData(Compresdata);
+	SingleAddSection::instance()->puFree();
 }
 
 BOOL CompressionData::EncryptionSectionData(
@@ -135,19 +133,7 @@ BOOL CompressionData::CompressSectionData()
 		wsTagetDirectory = csTmep.Left(n);
 		csTmep = csTmep.Right(m);
 	}
-	if (strlen(g_filenameonly) <= 0) {
-		RtlSecureZeroMemory(g_filenameonly, 0);
-		DWORD dwNum = WideCharToMultiByte(CP_OEMCP, NULL, csTmep, -1, NULL, NULL, 0, NULL);
-		WideCharToMultiByte(CP_OEMCP, NULL, csTmep, -1, g_filenameonly, dwNum, 0, NULL);
-		if (strlen(g_filenameonly) > 0)
-			strcat(g_filenameonly, "_FileData.txt");
-		else
-		{
-			strcpy(g_filenameonly, "FileData.txt");
-			AfxMessageBox(L"转换文件名有问题");
-		}
-	}
-	sTagetDirectory = (CodeTool::wstring2string(wsTagetDirectory) + g_filenameonly).c_str();
+	sTagetDirectory = g_CombatShellDataLocalFile;
 
 	std::string sDriectory = "";
 	std::string sCombatShellPath = "";
@@ -183,21 +169,20 @@ BOOL CompressionData::CompressSectionData()
 	g_stu->s_OneSectionSizeofData = FALSE;
 
 #ifdef _WIN64
+	// 压缩前后都可以, 仅壳代码VM
 	int nLen = 0;
-
-	// 压缩前后都可以,因为只对壳代码VM
 	VmcodeEntry(NULL, nLen);
 
 	PIMAGE_NT_HEADERS pNt = (PIMAGE_NT_HEADERS)(((PIMAGE_DOS_HEADER)m_lpBase)->e_lfanew + (DWORD64)m_lpBase);
 #else
 	PIMAGE_NT_HEADERS pNt = (PIMAGE_NT_HEADERS)(((PIMAGE_DOS_HEADER)m_lpBase)->e_lfanew + (DWORD)m_lpBase);
 #endif
+	if (!pNt)
+		return false;
 
 	DWORD dSectionCount = pNt->FileHeader.NumberOfSections;
 	PIMAGE_SECTION_HEADER psection = (PIMAGE_SECTION_HEADER)m_SectionHeadre;
-
-	PuPEInfo obj_peInfo;
-	m_maskAddress = obj_peInfo.puGetSectionAddress((char *)m_lpBase, (BYTE *)NEWSECITONNAME);
+	m_maskAddress = SinglePuPEInfo::instance()->puGetSectionAddress((char *)m_lpBase, (BYTE *)NEWSECITONNAME);
 	if (!m_maskAddress) {
 		AfxMessageBox(L".VMP 区别识别失败!\n");
 		return false;
@@ -221,7 +206,8 @@ BOOL CompressionData::CompressSectionData()
 
 	PIMAGE_SECTION_HEADER pSections = (PIMAGE_SECTION_HEADER)m_SectionHeadre;
 	DWORD ComressTotalSize = 0;
-	// 注意修复-改为程序Name_FileData.txt
+
+	// 注意修复-改为程序Name_FileData.txt - 保存本地数据记录，脱壳使用.
 	if ((fpFile = fopen(sTagetDirectory.c_str(), "wb+")) == NULL)
 	{
 		AfxMessageBox(L"CombatShell 打开创建失败.");
@@ -230,9 +216,7 @@ BOOL CompressionData::CompressSectionData()
 	// 不压缩新增的区段（加壳区段）
 	for (DWORD i = 0; i < dSectionCount - 2; ++i)
 	{
-
 		DWORD DataSize = pSections->SizeOfRawData;
-
 		if (pSections->SizeOfRawData == 0)
 		{
 			fwrite(&pSections->SizeOfRawData, sizeof(DWORD), 1, fpFile);
@@ -242,12 +226,9 @@ BOOL CompressionData::CompressSectionData()
 			continue;
 		}
 
-		void* DataAddress = (void *)(pSections->PointerToRawData + (DWORD64)m_lpBase);
-
 		char* buf = NULL;
+		void* DataAddress = (void *)(pSections->PointerToRawData + (DWORD64)m_lpBase);
 #ifdef _WIN64
-//------------------------------------------------------------------------------------------
-
 		qlz_state_compress *state_compress = (qlz_state_compress *)malloc(sizeof(qlz_state_compress));
 
 		// 计算安全缓冲区
@@ -265,8 +246,6 @@ BOOL CompressionData::CompressSectionData()
 		/* 压缩 */
 		// const int dwCompressionSize = LZ4_compress_default((char*)DataAddress, buf, pSections->SizeOfRawData, blen);
 		const int dwCompressionSize = qlz_compress((char*)DataAddress, buf, blen, state_compress);
-
-//------------------------------------------------------------------------------------------
 #else 
 		DWORD blen;
 
@@ -286,9 +265,7 @@ BOOL CompressionData::CompressSectionData()
 		dwCompressionSize = LZ4_compress_default((char*)DataAddress, buf, pSections->SizeOfRawData, blen);
 
 #endif
-//------------------------------------------------------------------------------------------
 		fwrite(&dwCompressionSize, sizeof(DWORD), 1, fpFile);
-
 		fflush(fpFile);
 
 		// 区段异或加密
@@ -303,15 +280,16 @@ BOOL CompressionData::CompressSectionData()
 		// 保存压缩后总大小
 		ComressTotalSize += dwCompressionSize;
 
-		free(buf);
-
+		if (buf) {
+			free(buf);
+			buf = nullptr;
+		}
 		++pSections;
 	}
 	if (fpFile)
 		fclose(fpFile);
 
-	// 0x400 + (压缩后的大小 / 0x200 + ----压缩后的大小 % 0x200 ? 1 : 0) 0x200;
-	// 对齐数据
+	// 数据对齐 0x400 + (压缩后的大小 / 0x200 + ----压缩后的大小 % 0x200 ? 1 : 0) 0x200;
 	DWORD Size = 0;
 	if (ComressTotalSize % 0x200 == 0)
 	{
@@ -324,25 +302,19 @@ BOOL CompressionData::CompressSectionData()
 		int a = 10;
 	}
 
-	DWORD ModifySize = Size - 0x400;
 
 	// 创建一个新区段
+	DWORD ModifySize = Size - 0x400;
 	AddCompreDataSection(ModifySize);
 
-	// 重新加载个中PE数据保证下面数据获取最新
-	PuPEInfo obj_Peinfo;
-	CloseHandle(obj_Peinfo.puFileHandle());
-	FileName = obj_peInfo.puFilePath();
-	obj_Peinfo.puOpenFileLoad(FileName);
-	CompressionData obj_Compre;
-	// 修改新区段的信息数据 文件偏移 0x400  大小 压缩后数据对齐大小
-	BYTE Name[] = ".UPX";
-
-	obj_peInfo.puSetFileoffsetAndFileSize(m_lpBase, 0x400, ModifySize, Name);
-
-	BYTE Nmase[] = ".UPX";
-
-	PIMAGE_SECTION_HEADER compSectionAddress = obj_peInfo.puGetSectionAddress((char*)m_lpBase, Nmase);
+	// 重载文件 - 修改新区段的信息数据 文件偏移 0x400  大小 压缩后数据对齐大小
+	ReFileInit();
+	BYTE byteName[] = ".UPX";
+	SinglePuPEInfo::instance()->puSetFileoffsetAndFileSize(m_lpBase, 0x400, ModifySize, byteName);
+	BYTE byteNmase[] = ".UPX";
+	PIMAGE_SECTION_HEADER compSectionAddress = SinglePuPEInfo::instance()->puGetSectionAddress((char*)m_lpBase, byteNmase);
+	if (!compSectionAddress)
+		return false;
 
 	// 保存内存地址 用于解压基址
 	g_stu->s_CompressionSectionRva = compSectionAddress->VirtualAddress;
@@ -353,12 +325,16 @@ BOOL CompressionData::CompressSectionData()
 #else
 	memcpy((void*)(compSectionAddress->PointerToRawData + (DWORD)m_lpBase), SaveCompressData, ModifySize);
 #endif //  _WIN64
+	if (SaveCompressData) {
+		free(SaveCompressData);
+		SaveCompressData = nullptr;
+	}
 	// 拼接标准PE头 + 压缩数据的区段 + 自己的区段
 	char* ComressNewBase = (char*)malloc(Size + m_maskAddress->SizeOfRawData);
-
-	memset(ComressNewBase, 0, (Size + m_maskAddress->SizeOfRawData));
-
+	if (!ComressNewBase)
+		return false;
 	// 拼接标准PE
+	memset(ComressNewBase, 0, (Size + m_maskAddress->SizeOfRawData));
 	memcpy(ComressNewBase, m_lpBase, pStandardHeadersize);
 
 	
@@ -372,17 +348,21 @@ BOOL CompressionData::CompressSectionData()
 	memcpy(&ComressNewBase[Size], (void *)(m_maskAddress->PointerToRawData + (DWORD)m_lpBase), m_maskAddress->SizeOfRawData);
 #endif // _WIN64
 
-	DWORD dwWrite = 0;	OVERLAPPED OverLapped = { 0 };
-
 	// 清空数据目录表(收尾工作)
 	CleanDirectData(ComressNewBase, ComressTotalSize, Size);
 
 	// Create File
-	std::wstring wsMaskCompre = (wsTagetDirectory + L"CompressionMask.exe").c_str();
+	const std::wstring wsMaskCompre = (wsTagetDirectory + L"CompressionMask.exe").c_str();
 	HANDLE HandComprele = CreateFile(wsMaskCompre.c_str(), GENERIC_READ | GENERIC_WRITE, FALSE, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-	// Write Exe 完成压缩
-	int nRet = WriteFile(HandComprele, ComressNewBase, (Size + m_maskAddress->SizeOfRawData), &dwWrite, &OverLapped);
+	
+	// Write 写入压缩
+	DWORD dwWrite = 0;
+	int nRet = WriteFile(HandComprele, ComressNewBase, (Size + m_maskAddress->SizeOfRawData), &dwWrite, NULL);
 	CloseHandle(HandComprele);
+	if (ComressNewBase) {
+		free(ComressNewBase);
+		ComressNewBase = nullptr;
+	}
 	if (!nRet)
 		AfxMessageBox(L"CompressWriteFile failuer");
 	return TRUE;
@@ -403,7 +383,7 @@ DWORD CompressionData::IsSectionSize(DWORD MiscVirtualsize, DWORD sizeOfRawData)
 // 清空数据目录等数据
 BOOL CompressionData::CleanDirectData(const char* NewAddress, const DWORD & CompresSize, const DWORD & Size)
 {
-	if ((fpFile = fopen(g_filenameonly, "ab+")) == NULL)
+	if ((fpFile = fopen(g_CombatShellDataLocalFile, "ab+")) == NULL)
 	{
 		AfxMessageBox(L"文件打开失败");
 		return false;
@@ -415,11 +395,11 @@ BOOL CompressionData::CleanDirectData(const char* NewAddress, const DWORD & Comp
 #endif
 
 	PIMAGE_DATA_DIRECTORY pDirectory = (PIMAGE_DATA_DIRECTORY)pNt->OptionalHeader.DataDirectory;
+	if (!pDirectory)
+		return false;
 
 	DWORD dwSectionCount = pNt->FileHeader.NumberOfSections;
-
 	g_stu->s_SectionCount = dwSectionCount;
-
 	int k = 0;
 	// 保存\清空数据目录表
 	for (DWORD i = 0; i < 16; ++i)
@@ -436,7 +416,8 @@ BOOL CompressionData::CleanDirectData(const char* NewAddress, const DWORD & Comp
 	}
 
 	PIMAGE_SECTION_HEADER pSection = IMAGE_FIRST_SECTION(pNt);
-
+	if (!pSection)
+		return false;
 	// 保存\清空区段文件大小及文件偏移
 	for (DWORD i = 0; i < dwSectionCount - 2; ++i)
 	{
@@ -451,11 +432,9 @@ BOOL CompressionData::CleanDirectData(const char* NewAddress, const DWORD & Comp
 		++pSection;
 	}
 
-	// 最后一个区段是壳区段 信息不变 修改文件偏移
-	// 改变文件偏移对齐后文件偏移的地方
+	// 最后一个区段是壳区段 信息不变 修改文件偏移 - 改变文件偏移对齐后文件偏移的地方
 	pSection->PointerToRawData = Size;
-
-	fclose(fpFile);
-
+	if (fpFile)
+		fclose(fpFile);
 	return 0;
 }

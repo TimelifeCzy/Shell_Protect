@@ -18,6 +18,24 @@ PuPEInfo::~PuPEInfo()
 	m_bLoadFileSuc = false;
 }
 
+void PuPEInfo::puClearPeData() {
+	if (m_pFileBase) {
+		free(m_pFileBase);
+		m_pFileBase = nullptr;
+	}
+	if (m_hFileHandle) {
+		CloseHandle(m_hFileHandle);
+		m_hFileHandle = nullptr;
+	}
+	m_FileSize = 0;
+	m_pNtHeader = nullptr;
+	m_SectionHeader = nullptr;
+	m_OldOEP = 0;
+	m_SectionCount = 0;
+	OepFlag = false;
+	m_bLoadFileSuc = false;
+}
+
 BOOL PuPEInfo::IsPEFile()
 {
 	if (IMAGE_DOS_SIGNATURE != ((PIMAGE_DOS_HEADER)PuPEInfo::m_pFileBase)->e_magic) return FALSE;
@@ -80,15 +98,7 @@ BOOL PuPEInfo::prOpenFile(const CString & PathName)
 
 BOOL PuPEInfo::prOpenFileEx(const CString& PathName) {
 	// clear
-	if (m_pFileBase) {
-		free(m_pFileBase);
-		m_pFileBase = nullptr;
-	}
-	if (m_hFileHandle) {
-		CloseHandle(m_hFileHandle);
-		m_hFileHandle = nullptr;
-	}
-	m_bLoadFileSuc = false;
+	puClearPeData();
 
 	// reload
 	return prOpenFile(PathName);

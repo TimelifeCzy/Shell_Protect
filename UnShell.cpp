@@ -7,9 +7,9 @@
 #include "quick/quicklz.h"
 #include <io.h>
 
-extern _Stud* g_stu;
-extern CString UnShllerProcPath;
-extern char g_filenameonly[MAX_PATH];
+extern _Stud*	g_stu;
+extern CString	UnShllerProcPath;
+extern char		g_CombatShellDataLocalFile[MAX_PATH];
 
 #define NEWSECITONNAME ".VMP"
 
@@ -19,8 +19,20 @@ UnShell::UnShell()
 
 UnShell::~UnShell()
 {
-	if (fpFile)
+	SinglePuPEInfo::instance()->puClearPeData();
+	if (fpFile) {
 		fclose(fpFile);
+		fpFile = nullptr;
+	}
+
+	if (m_Base) {
+		free(m_Base);
+		m_Base = nullptr;
+	}
+	if (Sectionbuf) {
+		free(Sectionbuf);
+		Sectionbuf = nullptr;
+	}
 }
 
 BOOL UnShell::UnShellEx()
@@ -33,25 +45,10 @@ BOOL UnShell::UnShellEx()
 		return false;
 	}
 
-	CString tmep = UnShllerProcPath;
-	int n = tmep.ReverseFind('\\') + 1;
-	int m = tmep.GetLength() - n;
-	tmep = tmep.Right(m);
-	DWORD dwNum = 0;
-	dwNum = WideCharToMultiByte(CP_OEMCP, NULL, tmep, -1, NULL, NULL, 0, NULL);
-	WideCharToMultiByte(CP_OEMCP, NULL, tmep, -1, g_filenameonly, dwNum, 0, NULL);
-	if (g_filenameonly)
-		strcat(g_filenameonly, "_FileData.txt");
-	else
-	{
-		strcpy(g_filenameonly, "FileData.txt");
-		AfxMessageBox(L"转换文件名有问题");
-		return false;
-	}
-
-
 	DWORD dwSize = GetFileSize(hFile, NULL);
 	m_Base = (void*)malloc(dwSize);
+	if (!m_Base)
+		return false;
 	memset(m_Base, 0, dwSize);
 	DWORD dwRead = 0;
 	OVERLAPPED OverLapped = { 0 };
@@ -60,14 +57,10 @@ BOOL UnShell::UnShellEx()
 		CloseHandle(hFile);
 
 	pDosHander = (PIMAGE_DOS_HEADER)m_Base;
-
 	pHeadres = (PIMAGE_NT_HEADERS)(pDosHander->e_lfanew + (DWORD64)m_Base);
-
 	pSection = IMAGE_FIRST_SECTION(pHeadres);
-
 	m_NtAddress = (void*)pHeadres;
-
-	if ((fpFile = fopen(g_filenameonly, "rb+")) == NULL)
+	if ((fpFile = fopen(g_CombatShellDataLocalFile, "rb+")) == NULL)
 	{
 		AfxMessageBox(L"open file failure");
 		return false;
@@ -129,21 +122,21 @@ BOOL UnShell::RepCompressionData()
 	fread(&g_stu->s_dwOepBase, sizeof(DWORD), 1, fpFile);
 #endif
 
-	/*========================================================================*/
-
 	TotaldwSize = 0;
+	DWORD DataStart = 0x400;
+	DWORD Flag = 0;
+	BYTE Name[] = ".UPX";
+
+	Sectionbuf = (char*)malloc(TotaldwSize);
+	if (!Sectionbuf)
+		return false;
 
 	for (DWORD i = 0; i < SectionCount - 2; ++i)
 	{
 		TotaldwSize += g_stu->s_SectionOffsetAndSize[i][0];
 	}
 
-
-	Sectionbuf = (char*)malloc(TotaldwSize);
-
-	DWORD DataStart = 0x400;
-	DWORD Flag = 0;
-	BYTE Name[] = ".UPX";
+	SinglePuPEInfo::instance()->puOpenFileLoadEx(UnShllerProcPath);
 	PIMAGE_SECTION_HEADER address = (PIMAGE_SECTION_HEADER)SinglePuPEInfo::instance()->puGetSectionAddress((char*)m_Base, Name);
 	if (!address) {
 		return false;
@@ -207,26 +200,37 @@ BOOL UnShell::DeleteSectionInfo()
 	BYTE Name[] = NEWSECITONNAME;
 	BYTE Name1[] = ".UPX";
 	DWORD64 masAdd = (DWORD64)SinglePuPEInfo::instance()->puGetSectionAddress((char*)m_Base, Name);
-	if (!masAdd)
+	if (!masAdd) {
+		if (temp) {
+			free(temp);
+			temp = nullptr;
+		}
 		return false;
-
+	}
 	VirtualProtect((char*)masAdd, 40, PAGE_READWRITE, &old);
 	memcpy((char*)masAdd, temp, 40);
 	VirtualProtect((char*)masAdd, 40, old, &old);
 
 	DWORD64 comAdd = (DWORD64)SinglePuPEInfo::instance()->puGetSectionAddress((char*)m_Base, Name1);
-	if (!comAdd)
+	if (!comAdd) {
+		if (temp) {
+			free(temp);
+			temp = nullptr;
+		}
 		return false;
+	}
 	VirtualProtect((char*)comAdd, 40, PAGE_READWRITE, &old);
 	memcpy((char*)comAdd, temp, 40);
 	VirtualProtect((char*)comAdd, 40, old, &old);
+	
+	--pSection;
+	pHeadres->OptionalHeader.SizeOfImage = pSection->VirtualAddress + pSection->SizeOfRawData;
+	pHeadres->OptionalHeader.AddressOfEntryPoint = g_stu->s_dwOepBase;
+
 	if (temp) {
 		free(temp);
 		temp = nullptr;
 	}
-	--pSection;
-	pHeadres->OptionalHeader.SizeOfImage = pSection->VirtualAddress + pSection->SizeOfRawData;
-	pHeadres->OptionalHeader.AddressOfEntryPoint = g_stu->s_dwOepBase;
 	return TRUE;
 }
 
@@ -241,15 +245,20 @@ BOOL UnShell::SaveUnShell()
 
 	DWORD dwWrite = 0; 
 	OVERLAPPED OverLapped = { 0, };
-	std::string sDriectory = "";
-	std::string sCombatShellPath = "";
-	CodeTool::CGetCurrentDirectory(sDriectory);
-	if (!sDriectory.empty()) {
-		sCombatShellPath = (sDriectory + "UnShellNewPro.exe").c_str();
+	int n = UnShllerProcPath.ReverseFind('\\') + 1;
+	int m = UnShllerProcPath.GetLength() - n;
+	const CString csTargetDirectory = UnShllerProcPath.Left(n);
+	m_sUnShellPath = CodeTool::wstring2string((csTargetDirectory + L"UnShellNewPro.exe").GetString()).c_str();
+	HANDLE Handle = CreateFile(CodeTool::string2wstring(m_sUnShellPath).c_str(), GENERIC_READ | GENERIC_WRITE, FALSE, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+	int nRet = 0;
+	if (Handle != nullptr && Handle) {
+		nRet = WriteFile(Handle, UnShellNewFile, Size, &dwWrite, NULL);
+		CloseHandle(Handle);
 	}
-	HANDLE Handle = CreateFile(CodeTool::string2wstring(sCombatShellPath).c_str(), GENERIC_READ | GENERIC_WRITE, FALSE, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-	int nRet = WriteFile(Handle, UnShellNewFile, Size, &dwWrite, NULL);
-	CloseHandle(Handle);
+	if (UnShellNewFile) {
+		free(UnShellNewFile);
+		UnShellNewFile = nullptr;
+	}
 	if (!nRet)
 		return FALSE;
 	return TRUE;

@@ -20,6 +20,7 @@ public:
 	void puLoadLibraryStud(){ this->LoadLibraryStud(); }
 	void puRepairReloCationStud(){ this->RepairReloCationStud(); }
 	BOOL puCopyStud(){ return this->CopyStud(); }
+	void puClearStuData();
 
 private:
 	BOOL InitStuData();
