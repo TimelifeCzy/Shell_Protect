@@ -10,7 +10,12 @@ PE虚拟壳框架，项目意图给学习软件保护加壳的初学者提供一
 
 ![image](https://github.com/TimelifeCzy/Shell_Protect/blob/main/readmepng/1.png)
 
-2. 重点说一下虚拟机：虚拟壳目前仅支持x64加代码片段(需要稍作修改)，这只是一个示例和思路，如何自己编写虚拟机，运行态保存上下文环境及维护堆栈。
+2. 一键加壳成功后, 被加壳程序同级别会生成FileName_CombatShellData.dat文件，文件本身是原PE数据，仅脱壳使用，计划是保存新增节表中，简单方便化就本地存储.
+```
+压缩节表数据 | 清理的数据目录16个) + 清理的记录节表数据 | 原始的OEP
+```
+
+3. 虚拟机：虚拟壳目前仅支持x64加代码片段(需要稍作修改)，这只是一个示例和思路，如何自己编写虚拟机，运行态保存上下文环境及维护堆栈。
 
 - 对需要加密代码段进行Vmcode，简单点说加密代码，dll中壳代码执行vmentry进入虚拟机，默认x32直接进入壳main函数未Vm。
 
@@ -28,10 +33,10 @@ PE虚拟壳框架，项目意图给学习软件保护加壳的初学者提供一
 
 项目中的虚拟机没有高级算法，只是简单加密用来阐述过程，Vmcode分析引擎因为能力/精力有限，没有去构造Vmcode代码分析引擎，只是构造了解密后代码分析引擎挂钩handle处理。再加壳时候记录了加密汇编大小/长度/基于该代码段的起始偏移，用来做为Vmcode分析引擎使用，快速解密和处理分发。
 
+工程中有一处硬编码，void CompressionData::VmcodeEntry(), 可以做反汇编获取行数优化.
 **注意：本项目仅支持加壳器中的Main函数，只对Main汇编映射指令进行了处理，未处理其它指令。**
 
 造轮子的意义在于学习理解：理解虚拟机和指令集映射，理解虚拟机结构和协同工作。
-
 推荐专业的虚拟机分析引擎(看雪版主玩命)： https://github.com/devilogic/cerberus.git ，加密解密书籍有配套虚拟壳代码(没有看过)，也可以参考。
 
 软件保护技术还可应用于免杀，当然可以扩展更深层次了解杀软检测及反检测。
@@ -39,7 +44,7 @@ PE虚拟壳框架，项目意图给学习软件保护加壳的初学者提供一
 ![image](https://github.com/TimelifeCzy/Shell_Protect/blob/main/readmepng/5.png)
 ![image](https://github.com/TimelifeCzy/Shell_Protect/blob/main/readmepng/6.png)
 
-项目仅用于学习，请大家重视。
+项目不提供Release版本，仅用于学习和研究。
 
 ## Stargazers over time
 

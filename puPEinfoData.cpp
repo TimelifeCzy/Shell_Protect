@@ -30,7 +30,7 @@ void PuPEInfo::puClearPeData() {
 	m_FileSize = 0;
 	m_pNtHeader = nullptr;
 	m_SectionHeader = nullptr;
-	m_OldOEP = 0;
+	m_OEP = 0;
 	m_SectionCount = 0;
 	OepFlag = false;
 	m_bLoadFileSuc = false;
@@ -79,7 +79,7 @@ BOOL PuPEInfo::prOpenFile(const CString & PathName)
 	m_pNtHeader = (void *)pHeadres;
 	if (PuPEInfo::OepFlag == FALSE)
 	{
-		m_OldOEP = pHeadres->OptionalHeader.AddressOfEntryPoint;
+		m_OEP = pHeadres->OptionalHeader.AddressOfEntryPoint;
 		OepFlag = TRUE;
 	}
 

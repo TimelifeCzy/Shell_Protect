@@ -65,6 +65,9 @@
     <ClCompile Include="..\quick\quicklz.c">
       <Filter>quick</Filter>
     </ClCompile>
+    <ClCompile Include="..\lz4\include\lz4.c">
+      <Filter>lz4</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="CombatShell.rc">

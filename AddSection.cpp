@@ -34,7 +34,7 @@ BOOL AddSection::Init() {
 	pSectionHeadre = SinglePuPEInfo::instance()->puGetSection();
 	FileSize = SinglePuPEInfo::instance()->puFileSize();
 	FileHandle = SinglePuPEInfo::instance()->puFileHandle();
-	OldOep = SinglePuPEInfo::instance()->puOldOep();
+	OldOep = SinglePuPEInfo::instance()->puGetOEP();
 	return true;
 }
 

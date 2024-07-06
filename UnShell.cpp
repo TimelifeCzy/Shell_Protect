@@ -19,6 +19,10 @@ UnShell::UnShell()
 
 UnShell::~UnShell()
 {
+	puClose();
+}
+
+void UnShell::puClose() {
 	SinglePuPEInfo::instance()->puClearPeData();
 	if (fpFile) {
 		fclose(fpFile);
@@ -29,9 +33,9 @@ UnShell::~UnShell()
 		free(m_Base);
 		m_Base = nullptr;
 	}
-	if (Sectionbuf) {
-		free(Sectionbuf);
-		Sectionbuf = nullptr;
+	if (m_pSectionData) {
+		free(m_pSectionData);
+		m_pSectionData = nullptr;
 	}
 }
 
@@ -46,12 +50,12 @@ BOOL UnShell::UnShellEx()
 	}
 
 	DWORD dwSize = GetFileSize(hFile, NULL);
-	m_Base = (void*)malloc(dwSize);
+	m_Base = (void*)malloc(dwSize + 1);
 	if (!m_Base)
 		return false;
-	memset(m_Base, 0, dwSize);
+	memset(m_Base, 0, dwSize + 1);
 	DWORD dwRead = 0;
-	OVERLAPPED OverLapped = { 0 };
+	OVERLAPPED OverLapped = { 0, };
 	int nRetCode = ReadFile(hFile, m_Base, dwSize, &dwRead, &OverLapped);
 	if (hFile)
 		CloseHandle(hFile);
@@ -93,13 +97,11 @@ BOOL UnShell::RepCompressionData()
 		return false;
 	}
 
-	DWORD SectionCount = pHeadres->FileHeader.NumberOfSections;
-
-	for (DWORD i = 0; i < SectionCount - 3; ++i)
+	DWORD dwSectionCount = pHeadres->FileHeader.NumberOfSections;
+	for (DWORD i = 0; i < dwSectionCount - 3; ++i)
 	{
 		fread(&g_stu->s_blen[i], sizeof(DWORD), 1, fpFile);
 	}
-
 
 	for (DWORD i = 0; i < 16; ++i)
 	{
@@ -108,7 +110,7 @@ BOOL UnShell::RepCompressionData()
 		// fscanf(fpFile, "%04x %04x", &g_stu->s_DataDirectory[i][0], &g_stu->s_DataDirectory[i][1]);
 	}
 
-	for (DWORD i = 0; i < SectionCount - 2; ++i)
+	for (DWORD i = 0; i < dwSectionCount - 2; ++i)
 	{
 
 		fread(&g_stu->s_SectionOffsetAndSize[i][0], sizeof(DWORD), 1, fpFile);
@@ -122,19 +124,19 @@ BOOL UnShell::RepCompressionData()
 	fread(&g_stu->s_dwOepBase, sizeof(DWORD), 1, fpFile);
 #endif
 
-	TotaldwSize = 0;
+	m_dwTotaldwSize = 0;
 	DWORD DataStart = 0x400;
 	DWORD Flag = 0;
 	BYTE Name[] = ".UPX";
 
-	Sectionbuf = (char*)malloc(TotaldwSize);
-	if (!Sectionbuf)
-		return false;
-
-	for (DWORD i = 0; i < SectionCount - 2; ++i)
+	for (DWORD i = 0; i < dwSectionCount - 2; ++i)
 	{
-		TotaldwSize += g_stu->s_SectionOffsetAndSize[i][0];
+		m_dwTotaldwSize += g_stu->s_SectionOffsetAndSize[i][0];
 	}
+
+	m_pSectionData = (char*)malloc(m_dwTotaldwSize + 1);
+	if (!m_pSectionData)
+		return false;
 
 	SinglePuPEInfo::instance()->puOpenFileLoadEx(UnShllerProcPath);
 	PIMAGE_SECTION_HEADER address = (PIMAGE_SECTION_HEADER)SinglePuPEInfo::instance()->puGetSectionAddress((char*)m_Base, Name);
@@ -144,7 +146,7 @@ BOOL UnShell::RepCompressionData()
 
 	int nFlag = 0;
 	DWORD Address = address->PointerToRawData;
-	for (DWORD i = 0; i < SectionCount - 2; ++i)
+	for (DWORD i = 0; i < dwSectionCount - 2; ++i)
 	{
 		if (g_stu->s_blen[nFlag] == 0)
 		{
@@ -153,10 +155,10 @@ BOOL UnShell::RepCompressionData()
 		}
 #ifdef _WIN64
 		qlz_state_decompress *state_decompress = (qlz_state_decompress *)VirtualAlloc(NULL, sizeof(qlz_state_decompress), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-		int nRet = qlz_decompress((char*)(Address + (DWORD64)m_Base), &Sectionbuf[Flag], state_decompress);
+		int nRet = qlz_decompress((char*)(Address + (DWORD64)m_Base), &m_pSectionData[Flag], state_decompress);
 #else
 		// 缓冲区  RVA+加载基址  缓冲区大小  压缩过去的大小
-		int nRet = LZ4_decompress_safe((char*)(Address + (DWORD)m_Base), &Sectionbuf[Flag], g_stu->s_blen[nFlag], g_stu->s_SectionOffsetAndSize[i][0]);
+		int nRet = LZ4_decompress_safe((char*)(Address + (DWORD)m_Base), &m_pSectionData[Flag], g_stu->s_blen[nFlag], g_stu->s_SectionOffsetAndSize[i][0]);
 #endif
 		Address += g_stu->s_blen[i];
 		Flag += g_stu->s_SectionOffsetAndSize[i][0];
@@ -222,7 +224,7 @@ BOOL UnShell::DeleteSectionInfo()
 	VirtualProtect((char*)comAdd, 40, PAGE_READWRITE, &old);
 	memcpy((char*)comAdd, temp, 40);
 	VirtualProtect((char*)comAdd, 40, old, &old);
-	
+
 	--pSection;
 	pHeadres->OptionalHeader.SizeOfImage = pSection->VirtualAddress + pSection->SizeOfRawData;
 	pHeadres->OptionalHeader.AddressOfEntryPoint = g_stu->s_dwOepBase;
@@ -236,12 +238,12 @@ BOOL UnShell::DeleteSectionInfo()
 
 BOOL UnShell::SaveUnShell()
 {
-	DWORD Size = 0x400 + TotaldwSize;
-	UnShellNewFile = (char*)malloc(Size);
+	DWORD Size = 0x400 + m_dwTotaldwSize;
+	UnShellNewFile = (char*)malloc(Size + 1);
 	if (!UnShellNewFile || (!m_Base))
 		return false;
 	memcpy(UnShellNewFile, m_Base, 0x400);
-	memcpy(&UnShellNewFile[0x400], Sectionbuf, TotaldwSize);
+	memcpy(&UnShellNewFile[0x400], m_pSectionData, m_dwTotaldwSize);
 
 	DWORD dwWrite = 0; 
 	OVERLAPPED OverLapped = { 0, };

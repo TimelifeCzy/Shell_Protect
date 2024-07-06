@@ -51,7 +51,7 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 24,7,3,1
+ FILEVERSION 24,7,6,1
  PRODUCTVERSION 1,0,0,1
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
@@ -67,7 +67,7 @@ BEGIN
     BEGIN
         BLOCK "080404b0"
         BEGIN
-            VALUE "FileVersion", "24.7.3.1"
+            VALUE "FileVersion", "24.7.6.1"
             VALUE "InternalName", "CombatSh.dll"
             VALUE "LegalCopyright", "Copyright (C) 2024"
             VALUE "OriginalFilename", "CombatSh.dll"

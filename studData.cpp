@@ -18,7 +18,7 @@ studData::~studData()
 {
 } 
 
-BOOL studData::InitStuData() {
+BOOL studData::InitStuData(const DWORD dwOldOEP) {
 	try
 	{
 		if (!SinglePuPEInfo::instance()->puOpenFileLoadEx(m_MasterFilePath))
@@ -28,9 +28,18 @@ BOOL studData::InitStuData() {
 #ifdef _WIN64
 		m_dwNewSectionAddress64 = (DWORD64)SinglePuPEInfo::instance()->puGetSectionAddress((char*)m_lpBase, (BYTE*)NEWSECITONNAME);
 #else
-		m_dwNewSectionAddress = (DWORD)pPeObj->puGetSectionAddress((char*)m_lpBase, (BYTE*)NEWSECITONNAME);
+		m_dwNewSectionAddress = (DWORD)SinglePuPEInfo::instance()->puGetSectionAddress((char*)m_lpBase, (BYTE*)NEWSECITONNAME);
 #endif
-		m_Oep = SinglePuPEInfo::instance()->puOldOep();
+		m_OldOEP = dwOldOEP;
+		FILE* fpFile = nullptr;
+		if ((fpFile = fopen(g_CombatShellDataLocalFile, "ab+")) == NULL) {
+
+			AfxMessageBox(L"文件打开失败");
+			return false;
+		}
+		fwrite(&m_OldOEP, sizeof(DWORD), 1, fpFile);
+		fclose(fpFile);
+		g_stu->s_dwOepBase = m_OldOEP;
 	}
 	catch (const std::exception&)
 	{
@@ -76,9 +85,9 @@ BOOL studData::LoadLibraryStud()
 	m_dwNewSectionAddress64 = (DWORD64)SinglePuPEInfo::instance()->puGetSectionAddress((char *)m_lpBase, (BYTE *)NEWSECITONNAME);
 	m_ImageBase64 = ((PIMAGE_NT_HEADERS)SinglePuPEInfo::instance()->puGetNtHeadre())->OptionalHeader.ImageBase;
 #else
-	m_dwStudSectionAddress = (DWORD)pPeObj->puGetSectionAddress((char *)m_studBase, (BYTE *)".text");
-	m_dwNewSectionAddress = (DWORD)pPeObj->puGetSectionAddress((char *)m_lpBase, (BYTE *)NEWSECITONNAME);
-	m_ImageBase = ((PIMAGE_NT_HEADERS)pPeObj->puGetNtHeadre())->OptionalHeader.ImageBase;
+	m_dwStudSectionAddress = (DWORD)SinglePuPEInfo::instance()->puGetSectionAddress((char *)m_studBase, (BYTE *)".text");
+	m_dwNewSectionAddress = (DWORD)SinglePuPEInfo::instance()->puGetSectionAddress((char *)m_lpBase, (BYTE *)NEWSECITONNAME);
+	m_ImageBase = ((PIMAGE_NT_HEADERS)SinglePuPEInfo::instance()->puGetNtHeadre())->OptionalHeader.ImageBase;
 #endif // _WIN64
 
 	return TRUE;
@@ -146,16 +155,6 @@ BOOL studData::RepairReloCationStud()
 // 拷贝stud数据到新增区段
 BOOL studData::CopyStud()
 {
-	g_stu->s_dwOepBase = m_Oep;
-	FILE* fpFile = nullptr;
-	if ((fpFile = fopen(g_CombatShellDataLocalFile, "ab+")) == NULL) {
-	
-		AfxMessageBox(L"文件打开失败");
-		return false;
-	}
-
-	fwrite(&m_Oep, sizeof(DWORD), 1, fpFile);
-	fclose(fpFile);
 	PIMAGE_SECTION_HEADER studSection = SinglePuPEInfo::instance()->puGetSectionAddress((char *)m_studBase, (BYTE *)".text");
 	PIMAGE_SECTION_HEADER SurceBase = SinglePuPEInfo::instance()->puGetSectionAddress((char *)m_lpBase, (BYTE *)NEWSECITONNAME);
 	if (!studSection || (!SurceBase))
@@ -200,6 +199,6 @@ void studData::puClearStuData()
 		m_lpBase = nullptr;
 	if (m_studBase)
 		m_studBase = nullptr;
-	m_Oep = 0;
+	m_OldOEP = 0;
 	m_ImageBase = 0;
 }

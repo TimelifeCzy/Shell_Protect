@@ -102,6 +102,7 @@ BOOL MasterWindows::NewSection()
 		return false;
 
 	SingleAddSection::instance()->puInti(m_MasterStaticTextStr);
+	m_dwOldOEP = SinglePuPEInfo::instance()->puGetOEP();
 	SingleAddSection::instance()->puModifySectioNumber();
 	nRet = SingleAddSection::instance()->puModifySectionInfo(Name, SectionSize);
 	if (!nRet) {
@@ -274,7 +275,7 @@ void MasterWindows::OnBnClickedButton1()
 
 	// 3. CombatShell 数据拷贝/操作
 	m_MasterStaticTextStr = (csTargetDirectory + "CompressionMask.exe").GetBSTR();
-	if (!SingleStudData::instance()->puInit(m_MasterStaticTextStr)) {
+	if (!SingleStudData::instance()->puInit(m_MasterStaticTextStr, m_dwOldOEP)) {
 		AfxMessageBox(L"studData failuer!");
 		return;
 	}
@@ -292,10 +293,10 @@ void MasterWindows::OnBnClickedButton1()
 			m_MasterStaticTextStr = nStr;
 		}
 		ShowPEInfoData(m_MasterStaticTextStr);
-		AfxMessageBox(m_MasterStaticTextStr + L"   Success!");
+		AfxMessageBox((m_MasterStaticTextStr + L"   Success!").GetString());
 	}
 	else
-		AfxMessageBox(m_MasterStaticTextStr + L"   Failure!");
+		AfxMessageBox((m_MasterStaticTextStr + L"   Failure!").GetString());
 }
 
 // PE View
@@ -362,38 +363,39 @@ void MasterWindows::OnBnClickedButton2()
 	UpdateData(TRUE);
 	if (m_MasterStaticTextStr.IsEmpty())
 	{
-		AfxMessageBox(L"请先拖入文件");
+		MessageBox(L"请先拖入文件");
 		return;
 	}
 
-	// 判断是否我们的壳，否则不给脱壳
+	// 判断是否我们的壳，否则不给脱壳(未检测.)
 	UnShllerProcPath = m_MasterStaticTextStr;
 
 	UnShell obj_Unshell;
 	if (!obj_Unshell.puUnShell()) {
-		AfxMessageBox(L"puUnShell error");
+		MessageBox(L"puUnShell error");
 		return;
 	}
 	if (!obj_Unshell.puRepCompressionData()) {
-		AfxMessageBox(L"puRepCompressionData error.");
+		MessageBox(L"puRepCompressionData error.");
 		return;
 	}
 	if(!obj_Unshell.puDeleteSectionInfo()) {
-		AfxMessageBox(L"puDeleteSectionInfo error.");
+		MessageBox(L"puDeleteSectionInfo error.");
 		return;
 	}
 
 	if (obj_Unshell.puSaveUnShell())
 	{
-		DeleteFile(m_MasterStaticTextStr);
 		const std::wstring sUnShellPath = CodeTool::string2wstring(obj_Unshell.puGetUnShellPath().c_str()).c_str();
+		// Clear
+		obj_Unshell.puClose();
+		DeleteFile(m_MasterStaticTextStr);
 		int nRet = CopyFile(sUnShellPath.c_str(), m_MasterStaticTextStr, FALSE);
 		if (nRet) {
-			m_MasterStaticTextStr = sUnShellPath.c_str();
 			DeleteFile(sUnShellPath.c_str());
 			DeleteFileA(g_CombatShellDataLocalFile);
 		}
-		AfxMessageBox(L"puSaveUnShell_Success");
+		MessageBox(L"puSaveUnShell_Success.");
 	}
 	ShowPEInfoData(m_MasterStaticTextStr);
 }

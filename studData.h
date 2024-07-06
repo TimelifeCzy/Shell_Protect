@@ -13,9 +13,9 @@ public:
 	~studData();
 
 public:
-	BOOL puInit(CString csFilePath) { 
+	BOOL puInit(CString csFilePath, const DWORD dwOEP) {
 		m_MasterFilePath = csFilePath.GetString();
-		return this->InitStuData();
+		return this->InitStuData(dwOEP);
 	}
 	void puLoadLibraryStud(){ this->LoadLibraryStud(); }
 	void puRepairReloCationStud(){ this->RepairReloCationStud(); }
@@ -23,7 +23,7 @@ public:
 	void puClearStuData();
 
 private:
-	BOOL InitStuData();
+	BOOL InitStuData(const DWORD dwOEP);
  	BOOL LoadLibraryStud();
 	BOOL RepairReloCationStud();
 	BOOL CopyStud();
@@ -43,7 +43,7 @@ private:
 	DWORD m_dwStudSectionAddress = 0;
 	DWORD64 m_dwStudSectionAddress64 = 0;
 
-	DWORD64 m_Oep = 0;
+	DWORD64 m_OldOEP = 0;
 
 	DWORD m_ImageBase = 0;
 	DWORD64 m_ImageBase64 = 0;

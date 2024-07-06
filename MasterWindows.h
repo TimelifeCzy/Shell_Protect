@@ -45,4 +45,5 @@ public:
 	afx_msg void OnPaint();
 	CStatic m_bitmapZionloab;
 
+	DWORD m_dwOldOEP = 0;
 };

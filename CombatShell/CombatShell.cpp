@@ -432,7 +432,7 @@ void RepairTheIAT()
 
 #else
 	// IAT
-	byte OpCode[] = { 0xe8, 0x01, 0x00, 0x00,
+	BYTE OpCode[] = { 0xe8, 0x01, 0x00, 0x00,
 					  0x00, 0xe9, 0x58, 0xeb,
 					  0x01, 0xe8, 0xb8, 0x8d,
 					  0xe4, 0xd8, 0x62, 0xeb,
@@ -568,7 +568,7 @@ DWORD ProcessCallBack(LPVOID lpThreadParameter)
 	MyFindWindowExW = (FnFindWindowExW)puGetProcAddress(g_stud.s_User32, 0x4818F71E);
 	MyPostMessageW = (FnPostMessage)puGetProcAddress(g_stud.s_User32, 0x386047E);
 
-	HWND hCalc, hbutton;
+	HWND hCalc = nullptr, hbutton = nullptr;
 	HWND* hWnd = (HWND*)lpThreadParameter;
 	static int i = 10;
 	MySleep(10000);

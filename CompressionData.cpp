@@ -123,18 +123,6 @@ BOOL CompressionData::EncryptionSectionData(
 // 压缩PE区段数据
 BOOL CompressionData::CompressSectionData()
 {
-	CString csTmep;
-	std::string sTagetDirectory = "";
-	std::wstring wsTagetDirectory = L"";
-	{
-		csTmep = m_MasterStaticTextStr;
-		int n = csTmep.ReverseFind('\\') + 1;
-		int m = csTmep.GetLength() - n;
-		wsTagetDirectory = csTmep.Left(n);
-		csTmep = csTmep.Right(m);
-	}
-	sTagetDirectory = g_CombatShellDataLocalFile;
-
 	std::string sDriectory = "";
 	std::string sCombatShellPath = "";
 	CodeTool::CGetCurrentDirectory(sDriectory);
@@ -208,7 +196,7 @@ BOOL CompressionData::CompressSectionData()
 	DWORD ComressTotalSize = 0;
 
 	// 注意修复-改为程序Name_FileData.txt - 保存本地数据记录，脱壳使用.
-	if ((fpFile = fopen(sTagetDirectory.c_str(), "wb+")) == NULL)
+	if ((fpFile = fopen(g_CombatShellDataLocalFile, "wb+")) == NULL) 
 	{
 		AfxMessageBox(L"CombatShell 打开创建失败.");
 		return false;
@@ -352,6 +340,14 @@ BOOL CompressionData::CompressSectionData()
 	CleanDirectData(ComressNewBase, ComressTotalSize, Size);
 
 	// Create File
+	std::wstring wsTagetDirectory = L"";
+	{
+		CString csTmep = m_MasterStaticTextStr;
+		int n = csTmep.ReverseFind('\\') + 1;
+		int m = csTmep.GetLength() - n;
+		wsTagetDirectory = csTmep.Left(n);
+		csTmep = csTmep.Right(m);
+	}
 	const std::wstring wsMaskCompre = (wsTagetDirectory + L"CompressionMask.exe").c_str();
 	HANDLE HandComprele = CreateFile(wsMaskCompre.c_str(), GENERIC_READ | GENERIC_WRITE, FALSE, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 	

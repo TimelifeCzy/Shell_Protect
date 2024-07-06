@@ -44,7 +44,7 @@ public:
 		return m_hFileHandle; 
 	}
 
-	DWORD64 puOldOep(){ return this->m_OldOEP; }
+	DWORD64 puGetOEP(){ return this->m_OEP; }
 
 	int puGetSectionCount() { return this->m_SectionCount; }
 
@@ -95,8 +95,8 @@ public:
 	// 保存文件句柄
 	HANDLE m_hFileHandle = nullptr;
 
-	// 保存原始OEP
-	DWORD m_OldOEP = 0;
+	// 保存OEP
+	DWORD m_OEP = 0;
 
 	// 保存区段个数
 	int	m_SectionCount = 0;

@@ -13,6 +13,7 @@ public:
 	BOOL puDeleteSectionInfo(){ return this->DeleteSectionInfo(); }
 	BOOL puSaveUnShell(){ return this->SaveUnShell(); }
 	const std::string puGetUnShellPath() { return m_sUnShellPath.c_str(); }
+	void puClose();
 private:
 	BOOL UnShellEx();
 	BOOL RepCompressionData();
@@ -28,8 +29,8 @@ private:
 	PIMAGE_NT_HEADERS pHeadres;
 	PIMAGE_SECTION_HEADER pSection;
 	char* UnShellNewFile = nullptr;
-	DWORD TotaldwSize = 0;
-	char* Sectionbuf = nullptr;
+	DWORD m_dwTotaldwSize = 0;
+	char* m_pSectionData = nullptr;
 	FILE *fpFile = nullptr;
 
 	std::string m_sUnShellPath = "";
