@@ -2,12 +2,21 @@
 #include "AddSection.h"
 #include "puPEinfoData.h"
 
-// x64 asm 
+// x64 asm
 #ifdef _WIN64
 extern "C" void __stdcall AsmCountTemp(PVOID dwdata);
 extern "C" void __stdcall AsmCountTemp1(PVOID dwdata);
 #else
 #endif
+
+namespace {
+DWORD AlignValue(DWORD value, DWORD alignment)
+{
+	if (alignment == 0)
+		return value;
+	return ((value + alignment - 1) / alignment) * alignment;
+}
+}
 
 AddSection::AddSection()
 {
@@ -28,7 +37,8 @@ AddSection::~AddSection()
 BOOL AddSection::Init() {
 	Free();
 
-	SinglePuPEInfo::instance()->puOpenFileLoadEx(m_FilePath);
+	if (!SinglePuPEInfo::instance()->puOpenFileLoadEx(m_FilePath))
+		return false;
 	pFileBaseData = SinglePuPEInfo::instance()->puGetImageBase();
 	pNtHeadre = SinglePuPEInfo::instance()->puGetNtHeadre();
 	pSectionHeadre = SinglePuPEInfo::instance()->puGetSection();
@@ -52,8 +62,10 @@ BOOL AddSection::Free() {
 	}
 	pNtHeadre = nullptr;
 	pSectionHeadre = nullptr;
+	NewpSection = nullptr;
 	SectionSizeof = 0;
 	FileSize = 0;
+	OldOep = 0;
 	return true;
 }
 
@@ -71,6 +83,9 @@ BOOL AddSection::ModifySectionNumber()
 
 BOOL AddSection::ModifySectionInfo(const BYTE* Name, const DWORD & size)
 {
+	if (!Name || !pSectionHeadre || !pNtHeadre || SectionSizeof == 0)
+		return FALSE;
+
 #ifdef _WIN64
 	DWORD64 pSectionAddress = (DWORD64)pSectionHeadre;
 #else
@@ -83,68 +98,50 @@ BOOL AddSection::ModifySectionInfo(const BYTE* Name, const DWORD & size)
 
 	pSectionAddress += 0x28;
 	NewpSection = (PIMAGE_SECTION_HEADER)pSectionAddress;
-	memcpy(NewpSection->Name, Name, sizeof(Name));
-	DWORD dwtemps = PtrpSection->VirtualAddress + PtrpSection->SizeOfRawData;
+	memset(NewpSection, 0, sizeof(IMAGE_SECTION_HEADER));
+	const size_t nameLen = strlen((const char*)Name);
+	memcpy(NewpSection->Name, Name, min(nameLen, (size_t)IMAGE_SIZEOF_SHORT_NAME));
+
+	PIMAGE_NT_HEADERS pNt = (PIMAGE_NT_HEADERS)pNtHeadre;
+	if (!pNt)
+		return FALSE;
+
+	PIMAGE_SECTION_HEADER pFirstSection = IMAGE_FIRST_SECTION(pNt);
+	DWORD firstRawPointer = 0;
+	for (WORD i = 0; i < pNt->FileHeader.NumberOfSections - 1; ++i)
+	{
+		if (pFirstSection[i].PointerToRawData != 0 &&
+			(firstRawPointer == 0 || pFirstSection[i].PointerToRawData < firstRawPointer))
+		{
+			firstRawPointer = pFirstSection[i].PointerToRawData;
+		}
+	}
+	if (firstRawPointer != 0)
+	{
+		const DWORD newSectionHeaderEnd = (DWORD)((BYTE*)(NewpSection + 1) - (BYTE*)pFileBaseData);
+		if (newSectionHeaderEnd > firstRawPointer) {
+			AfxMessageBox(L"区段表空间不足，无法安全添加新区段");
+			return FALSE;
+		}
+	}
+
+	const DWORD sectionAlignment = pNt->OptionalHeader.SectionAlignment;
+	const DWORD fileAlignment = pNt->OptionalHeader.FileAlignment;
+	const DWORD prevVirtualSize = max(PtrpSection->Misc.VirtualSize, PtrpSection->SizeOfRawData);
+	DWORD dwtemps = PtrpSection->VirtualAddress + prevVirtualSize;
 	if (!dwtemps)
 		return false;
 
-	DWORD Temp = 0;
-#ifdef _WIN64
-	// x64下使用，不涉及__int64类型，汇编使用同一套即可
-	AsmCountTemp(&dwtemps);
+	dwtemps = AlignValue(dwtemps, sectionAlignment);
 	NewpSection->VirtualAddress = dwtemps;
-	Temp = PtrpSection->SizeOfRawData + PtrpSection->PointerToRawData;
-	AsmCountTemp1(&Temp);
-	// check arg
+	DWORD Temp = PtrpSection->SizeOfRawData + PtrpSection->PointerToRawData;
+	Temp = AlignValue(Temp, fileAlignment);
 	if (!dwtemps || !Temp)
-		return 0;
+		return FALSE;
 
-#else
-	__asm{
-		pushad;
-		mov		esi, dwtemps;
-		mov		eax, dwtemps;
-		mov		edx, 0x1;
-		mov		cx, 0x1000;
-		div		cx;
-		test	dx, dx;
-		jz		MemSucess
-		shr		dx, 12;
-		inc		dx;
-		shl		dx, 12;
-		add		esi, edx;
-		shr		esi, 12;
-		shl		esi, 12;
-		mov		dwtemps, esi;
-	MemSucess:
-		popad
-	}
-	NewpSection->VirtualAddress = dwtemps;
-
-	Temp = PtrpSection->SizeOfRawData + PtrpSection->PointerToRawData;
-
-	__asm{
-		pushad;
-		mov		esi, Temp;
-		mov		edx, 0x1;
-		mov		eax, Temp;
-		mov		ecx, 0x200;
-		div		cx;
-		test	dx, dx;
-		jz		FileSucess
-		xor		eax, eax
-		mov		ax, 0x200;
-		sub		ax, dx;
-		add		esi, eax;
-		mov		Temp, esi;
-	FileSucess:
-		popad
-	}
-
-#endif // _WIN64
 	NewpSection->PointerToRawData = Temp;
-	NewpSection->SizeOfRawData = size;
-	NewpSection->Misc.VirtualSize = NewpSection->SizeOfRawData;
+	NewpSection->SizeOfRawData = AlignValue(size, fileAlignment);
+	NewpSection->Misc.VirtualSize = size;
 	NewpSection->Characteristics = 0xE00000E0;
 	return TRUE;
 }
@@ -152,7 +149,7 @@ BOOL AddSection::ModifySectionInfo(const BYTE* Name, const DWORD & size)
 BOOL AddSection::ModifyProgramEntryPoint()
 {
 	PIMAGE_NT_HEADERS pNt = (PIMAGE_NT_HEADERS)pNtHeadre;
-	if (pNt) {
+	if (pNt && NewpSection) {
 		pNt->OptionalHeader.AddressOfEntryPoint = NewpSection->VirtualAddress;
 		return TRUE;
 	}
@@ -162,8 +159,10 @@ BOOL AddSection::ModifyProgramEntryPoint()
 BOOL AddSection::ModifySizeofImage()
 {
 	PIMAGE_NT_HEADERS pNt = (PIMAGE_NT_HEADERS)pNtHeadre;
-	if (pNt) {
-		pNt->OptionalHeader.SizeOfImage = NewpSection->VirtualAddress + NewpSection->SizeOfRawData;
+	if (pNt && NewpSection) {
+		const DWORD sectionAlignment = pNt->OptionalHeader.SectionAlignment;
+		const DWORD imageEnd = NewpSection->VirtualAddress + max(NewpSection->Misc.VirtualSize, NewpSection->SizeOfRawData);
+		pNt->OptionalHeader.SizeOfImage = AlignValue(imageEnd, sectionAlignment);
 		pNt->OptionalHeader.DllCharacteristics = 0x8000;
 		return TRUE;
 	}
@@ -172,7 +171,13 @@ BOOL AddSection::ModifySizeofImage()
 
 BOOL AddSection::AddNewSectionByteData(const DWORD & size)
 {
-	const int newFileSize = FileSize + size;
+	if (!FileHandle || !pFileBaseData || !NewpSection)
+		return FALSE;
+
+	const DWORD sectionEnd = NewpSection->PointerToRawData + NewpSection->SizeOfRawData;
+	if (sectionEnd < NewpSection->PointerToRawData)
+		return FALSE;
+	const DWORD newFileSize = max(FileSize, sectionEnd);
 	m_newlpBase = (char *)malloc(newFileSize);
 	if (!m_newlpBase || (nullptr == m_newlpBase))
 		return false;
@@ -184,16 +189,16 @@ BOOL AddSection::AddNewSectionByteData(const DWORD & size)
 	else
 		return false;
 
+	SetFilePointer(FileHandle, 0, NULL, FILE_BEGIN);
 	DWORD dWriteSize = 0; OVERLAPPED OverLapped = { 0 };
-	int nRetCode = WriteFile(FileHandle, m_newlpBase, (FileSize + size), &dWriteSize, &OverLapped);
+	int nRetCode = WriteFile(FileHandle, m_newlpBase, newFileSize, &dWriteSize, &OverLapped);
 	if (m_newlpBase) {
 		free(m_newlpBase);
 		m_newlpBase = nullptr;
 	}
-	if (dWriteSize == 0){ 
-		AfxMessageBox(L"CreateSection WriteFIle faliuer"); 
-		return FALSE; 
+	if (!nRetCode || dWriteSize != newFileSize) {
+		AfxMessageBox(L"CreateSection WriteFIle faliuer");
+		return FALSE;
 	}
 	return TRUE;
 }
-

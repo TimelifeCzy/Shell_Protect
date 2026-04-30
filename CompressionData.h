@@ -36,7 +36,7 @@ private:
 	// 判断真正的区段数据大小（未对齐）
 	DWORD IsSectionSize(DWORD MiscVirtualsize, DWORD sizeOfRawData);
 	// 添加一个区段给压缩后的数据使用
-	void AddCompreDataSection(const DWORD & size);
+	BOOL AddCompreDataSection(const DWORD & size);
 	// Vmocde
 	void VmcodeEntry(char* TargetCode, _Out_ int &CodeLength);
 

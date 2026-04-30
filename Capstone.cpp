@@ -57,6 +57,11 @@ void Capstone::ShowAssembly(const void* pAddr, int nLen)
 	ReadProcessMemory(NULL, pAddr, pOpCode, nLen * 16, &dwCount);
 
 	int count = cs_disasm(Handle, (uint8_t*)pOpCode, nLen * 16, (uint64_t)pAddr, 0, &ins);
+	if (count <= 0 || !ins)
+	{
+		free(pOpCode);
+		return;
+	}
 
 	for (int i = 0; i < nLen; ++i)
 	{
@@ -74,7 +79,7 @@ void Capstone::ShowAssembly(const void* pAddr, int nLen)
 	}
 	printf("\n");
 	// 释放动态分配的空间
-	delete[] pOpCode;
+	free(pOpCode);
 	cs_free(ins, count);
 }
 
@@ -136,10 +141,17 @@ void Capstone::AnalyOpcodeHlper(const void* pAddr, int nLen)
 	SIZE_T dwCount = 0;
 	memcpy(pOpCode, pAddr, nLen * 16);
 	int count = cs_disasm(Handle, (uint8_t*)pOpCode, nLen * 16, (uint64_t)pAddr, 0, &ins);
+	if (count <= 0 || !ins)
+	{
+		free(pOpCode);
+		return;
+	}
+	const int decodeCount = min(count, nLen);
+	g_Vm->Vmencodeasmlen = decodeCount;
 	int vmflag = 1;
 	unsigned short randnumber = 0;
 
-	for (int i = 0; i < nLen; ++i)
+	for (int i = 0; i < decodeCount; ++i)
 	{
 		g_Vm->data->startoffset = ins[i].address - (uint64_t)pAddr;
 		// write : 2. 记录每次 异或密码 | byte大小 | 是否成功
@@ -170,6 +182,6 @@ void Capstone::AnalyOpcodeHlper(const void* pAddr, int nLen)
 	// fclose(fpVmFile);
 	printf("\n");
 	// 释放动态分配的空间
-	delete[] pOpCode;
+	free(pOpCode);
 	cs_free(ins, count);
 }

@@ -51,8 +51,8 @@ BOOL PuPEInfo::prOpenFile(const CString & PathName)
 	if (m_strNamePath.IsEmpty())
 		return false;
 
-	HANDLE hFile = CreateFile(PathName, GENERIC_READ | GENERIC_WRITE, FALSE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-	if ((int)hFile <= 0){ 
+	HANDLE hFile = CreateFile(PathName, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+	if (hFile == INVALID_HANDLE_VALUE || !hFile) {
 		AfxMessageBox(L"打开文件失败"); 
 		return FALSE; 
 	}
@@ -62,13 +62,24 @@ BOOL PuPEInfo::prOpenFile(const CString & PathName)
 	m_FileSize = dwSize;
 	
 	m_pFileBase = (void *)malloc(dwSize);
-	if (!m_pFileBase)
+	if (!m_pFileBase) {
+		CloseHandle(hFile);
+		m_hFileHandle = nullptr;
+		m_FileSize = 0;
 		return false;
+	}
 	memset(m_pFileBase, 0, dwSize);
 	
 	DWORD dwRead = 0;
 	OVERLAPPED OverLapped = { 0 };
-	int nRetCode = ReadFile(hFile, m_pFileBase, dwSize, &dwRead, &OverLapped);
+	if (!ReadFile(hFile, m_pFileBase, dwSize, &dwRead, &OverLapped) || dwRead != dwSize) {
+		free(m_pFileBase);
+		m_pFileBase = nullptr;
+		CloseHandle(hFile);
+		m_hFileHandle = nullptr;
+		m_FileSize = 0;
+		return FALSE;
+	}
 	
 	PIMAGE_DOS_HEADER pDosHander = (PIMAGE_DOS_HEADER)m_pFileBase;
 #ifdef _WIN64
@@ -87,6 +98,9 @@ BOOL PuPEInfo::prOpenFile(const CString & PathName)
 	if (!IsPEFile()){ 
 		free(m_pFileBase); 
 		m_pFileBase = nullptr; 
+		CloseHandle(hFile);
+		m_hFileHandle = nullptr;
+		m_FileSize = 0;
 		AfxMessageBox(L"非PE文件"); return FALSE; 
 	}
 
@@ -113,10 +127,9 @@ DWORD PuPEInfo::RVAofFOA(const DWORD Rva)
 
 	for (DWORD i = 0; i < dwSectionCount; ++i)
 	{
-		if ((Rva >= (pSection->VirtualAddress)) && (Rva < ((pSection->VirtualAddress) + (pSection->SizeOfRawData)))) {
-			// DWORD offset = Rva - pSection->VirtualAddress;
-			// DWORD FOA = pSection->PointerToRawData + offset;
-			return (pSection->VirtualAddress + pSection->PointerToRawData);
+		const DWORD sectionSize = max(pSection->Misc.VirtualSize, pSection->SizeOfRawData);
+		if ((Rva >= pSection->VirtualAddress) && (Rva < (pSection->VirtualAddress + sectionSize))) {
+			return pSection->PointerToRawData + (Rva - pSection->VirtualAddress);
 		}
 		++pSection;
 	}
@@ -125,12 +138,21 @@ DWORD PuPEInfo::RVAofFOA(const DWORD Rva)
 
 PIMAGE_SECTION_HEADER PuPEInfo::GetSectionAddress(const char* Base, const BYTE* SectionName)
 {
+	if (!Base || !SectionName)
+		return 0;
+
 	PIMAGE_NT_HEADERS pNt = (PIMAGE_NT_HEADERS)(((PIMAGE_DOS_HEADER)Base)->e_lfanew + Base);
+	if (!pNt || pNt->Signature != IMAGE_NT_SIGNATURE)
+		return 0;
 
 	PIMAGE_SECTION_HEADER pSect = IMAGE_FIRST_SECTION(pNt);
+	const WORD sectionCount = pNt->FileHeader.NumberOfSections;
+	char targetName[IMAGE_SIZEOF_SHORT_NAME] = { 0 };
+	const size_t nameLen = strlen((const char*)SectionName);
+	memcpy(targetName, SectionName, min(nameLen, (size_t)IMAGE_SIZEOF_SHORT_NAME));
 
-	for (int i = 0; i < m_SectionCount; ++i) { 
-		if (0 == _mbscmp(pSect->Name, SectionName))
+	for (WORD i = 0; i < sectionCount; ++i) {
+		if (memcmp(pSect->Name, targetName, IMAGE_SIZEOF_SHORT_NAME) == 0)
 			return (PIMAGE_SECTION_HEADER)pSect; 
 		++pSect; 
 	}
@@ -141,6 +163,8 @@ PIMAGE_SECTION_HEADER PuPEInfo::GetSectionAddress(const char* Base, const BYTE* 
 BOOL PuPEInfo::SetFileoffsetAndFileSize(const void* Base, const DWORD & offset, const DWORD size, const BYTE* Name)
 {
 	 PIMAGE_SECTION_HEADER Address = GetSectionAddress((char*)Base, Name);
+	 if (!Address)
+		return FALSE;
 
 	 Address->PointerToRawData = offset;
 

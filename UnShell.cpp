@@ -48,6 +48,8 @@ BOOL UnShell::UnShellEx()
 		AfxMessageBox(L"UnShellerProPath Empty faliuer");
 		return false;
 	}
+	if (hFile == INVALID_HANDLE_VALUE || !hFile)
+		return false;
 
 	DWORD dwSize = GetFileSize(hFile, NULL);
 	m_Base = (void*)malloc(dwSize + 1);
@@ -98,7 +100,8 @@ BOOL UnShell::RepCompressionData()
 	}
 
 	DWORD dwSectionCount = pHeadres->FileHeader.NumberOfSections;
-	for (DWORD i = 0; i < dwSectionCount - 3; ++i)
+	const DWORD originalSectionCount = (dwSectionCount >= 2) ? (dwSectionCount - 2) : 0;
+	for (DWORD i = 0; i < originalSectionCount; ++i)
 	{
 		fread(&g_stu->s_blen[i], sizeof(DWORD), 1, fpFile);
 	}
@@ -110,7 +113,7 @@ BOOL UnShell::RepCompressionData()
 		// fscanf(fpFile, "%04x %04x", &g_stu->s_DataDirectory[i][0], &g_stu->s_DataDirectory[i][1]);
 	}
 
-	for (DWORD i = 0; i < dwSectionCount - 2; ++i)
+	for (DWORD i = 0; i < originalSectionCount; ++i)
 	{
 
 		fread(&g_stu->s_SectionOffsetAndSize[i][0], sizeof(DWORD), 1, fpFile);
@@ -129,7 +132,7 @@ BOOL UnShell::RepCompressionData()
 	DWORD Flag = 0;
 	BYTE Name[] = ".UPX";
 
-	for (DWORD i = 0; i < dwSectionCount - 2; ++i)
+	for (DWORD i = 0; i < originalSectionCount; ++i)
 	{
 		m_dwTotaldwSize += g_stu->s_SectionOffsetAndSize[i][0];
 	}
@@ -137,6 +140,7 @@ BOOL UnShell::RepCompressionData()
 	m_pSectionData = (char*)malloc(m_dwTotaldwSize + 1);
 	if (!m_pSectionData)
 		return false;
+	memset(m_pSectionData, 0, m_dwTotaldwSize + 1);
 
 	SinglePuPEInfo::instance()->puOpenFileLoadEx(UnShllerProcPath);
 	PIMAGE_SECTION_HEADER address = (PIMAGE_SECTION_HEADER)SinglePuPEInfo::instance()->puGetSectionAddress((char*)m_Base, Name);
@@ -146,7 +150,14 @@ BOOL UnShell::RepCompressionData()
 
 	int nFlag = 0;
 	DWORD Address = address->PointerToRawData;
-	for (DWORD i = 0; i < dwSectionCount - 2; ++i)
+	qlz_state_decompress *state_decompress = nullptr;
+#ifdef _WIN64
+	state_decompress = (qlz_state_decompress *)VirtualAlloc(NULL, sizeof(qlz_state_decompress), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+	if (!state_decompress)
+		return FALSE;
+	memset(state_decompress, 0, sizeof(qlz_state_decompress));
+#endif
+	for (DWORD i = 0; i < originalSectionCount; ++i)
 	{
 		if (g_stu->s_blen[nFlag] == 0)
 		{
@@ -154,28 +165,30 @@ BOOL UnShell::RepCompressionData()
 			continue;
 		}
 #ifdef _WIN64
-		qlz_state_decompress *state_decompress = (qlz_state_decompress *)VirtualAlloc(NULL, sizeof(qlz_state_decompress), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 		int nRet = qlz_decompress((char*)(Address + (DWORD64)m_Base), &m_pSectionData[Flag], state_decompress);
 #else
 		// 缓冲区  RVA+加载基址  缓冲区大小  压缩过去的大小
 		int nRet = LZ4_decompress_safe((char*)(Address + (DWORD)m_Base), &m_pSectionData[Flag], g_stu->s_blen[nFlag], g_stu->s_SectionOffsetAndSize[i][0]);
 #endif
-		Address += g_stu->s_blen[i];
+		Address += g_stu->s_blen[nFlag];
 		Flag += g_stu->s_SectionOffsetAndSize[i][0];
 		nFlag++;
 	}
+#ifdef _WIN64
+	VirtualFree(state_decompress, 0, MEM_RELEASE);
+#endif
 
 	return TRUE;
 }
 
 BOOL UnShell::DeleteSectionInfo()
 {
-	char* temp = (char*)malloc(80);
-	if (!temp)
-		return false;
-	memset(temp, 0, 80);
+	BYTE temp[sizeof(IMAGE_SECTION_HEADER)] = { 0 };
 
 	DWORD dwSectionCount = pHeadres->FileHeader.NumberOfSections;
+	if (dwSectionCount < 2)
+		return FALSE;
+
 	PIMAGE_DATA_DIRECTORY pDataDirectory = (PIMAGE_DATA_DIRECTORY)pHeadres->OptionalHeader.DataDirectory;
 	for (DWORD i = 0; i < 16; ++i)
 	{
@@ -195,55 +208,54 @@ BOOL UnShell::DeleteSectionInfo()
 		++pSection;
 	}
 
-	pHeadres->FileHeader.NumberOfSections -= 2;
-	PIMAGE_SECTION_HEADER pSection_s = IMAGE_FIRST_SECTION(pHeadres);
-	DWORD NewdwSectionOfSize = (dwSectionCount - 2) * 0x28;
 	DWORD old = 0;
 	BYTE Name[] = NEWSECITONNAME;
 	BYTE Name1[] = ".UPX";
 	DWORD64 masAdd = (DWORD64)SinglePuPEInfo::instance()->puGetSectionAddress((char*)m_Base, Name);
-	if (!masAdd) {
-		if (temp) {
-			free(temp);
-			temp = nullptr;
-		}
-		return false;
-	}
-	VirtualProtect((char*)masAdd, 40, PAGE_READWRITE, &old);
-	memcpy((char*)masAdd, temp, 40);
-	VirtualProtect((char*)masAdd, 40, old, &old);
-
 	DWORD64 comAdd = (DWORD64)SinglePuPEInfo::instance()->puGetSectionAddress((char*)m_Base, Name1);
-	if (!comAdd) {
-		if (temp) {
-			free(temp);
-			temp = nullptr;
-		}
+	if (!masAdd || !comAdd)
 		return false;
-	}
-	VirtualProtect((char*)comAdd, 40, PAGE_READWRITE, &old);
-	memcpy((char*)comAdd, temp, 40);
-	VirtualProtect((char*)comAdd, 40, old, &old);
+
+	pHeadres->FileHeader.NumberOfSections -= 2;
+	VirtualProtect((char*)masAdd, sizeof(IMAGE_SECTION_HEADER), PAGE_READWRITE, &old);
+	memcpy((char*)masAdd, temp, sizeof(IMAGE_SECTION_HEADER));
+	VirtualProtect((char*)masAdd, sizeof(IMAGE_SECTION_HEADER), old, &old);
+
+	VirtualProtect((char*)comAdd, sizeof(IMAGE_SECTION_HEADER), PAGE_READWRITE, &old);
+	memcpy((char*)comAdd, temp, sizeof(IMAGE_SECTION_HEADER));
+	VirtualProtect((char*)comAdd, sizeof(IMAGE_SECTION_HEADER), old, &old);
 
 	--pSection;
 	pHeadres->OptionalHeader.SizeOfImage = pSection->VirtualAddress + pSection->SizeOfRawData;
 	pHeadres->OptionalHeader.AddressOfEntryPoint = g_stu->s_dwOepBase;
 
-	if (temp) {
-		free(temp);
-		temp = nullptr;
-	}
 	return TRUE;
 }
 
 BOOL UnShell::SaveUnShell()
 {
-	DWORD Size = 0x400 + m_dwTotaldwSize;
+	const DWORD headerSize = pHeadres->OptionalHeader.SizeOfHeaders;
+	DWORD Size = headerSize;
+	PIMAGE_SECTION_HEADER pSections = IMAGE_FIRST_SECTION(pHeadres);
+	for (DWORD i = 0; i < pHeadres->FileHeader.NumberOfSections; ++i, ++pSections)
+	{
+		Size = max(Size, pSections->PointerToRawData + pSections->SizeOfRawData);
+	}
 	UnShellNewFile = (char*)malloc(Size + 1);
 	if (!UnShellNewFile || (!m_Base))
 		return false;
-	memcpy(UnShellNewFile, m_Base, 0x400);
-	memcpy(&UnShellNewFile[0x400], m_pSectionData, m_dwTotaldwSize);
+	memset(UnShellNewFile, 0, Size + 1);
+	memcpy(UnShellNewFile, m_Base, headerSize);
+
+	DWORD dataOffset = 0;
+	pSections = IMAGE_FIRST_SECTION(pHeadres);
+	for (DWORD i = 0; i < pHeadres->FileHeader.NumberOfSections; ++i, ++pSections)
+	{
+		if (pSections->SizeOfRawData == 0)
+			continue;
+		memcpy(&UnShellNewFile[pSections->PointerToRawData], &m_pSectionData[dataOffset], pSections->SizeOfRawData);
+		dataOffset += pSections->SizeOfRawData;
+	}
 
 	DWORD dwWrite = 0; 
 	OVERLAPPED OverLapped = { 0, };
@@ -253,7 +265,7 @@ BOOL UnShell::SaveUnShell()
 	m_sUnShellPath = CodeTool::wstring2string((csTargetDirectory + L"UnShellNewPro.exe").GetString()).c_str();
 	HANDLE Handle = CreateFile(CodeTool::string2wstring(m_sUnShellPath).c_str(), GENERIC_READ | GENERIC_WRITE, FALSE, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 	int nRet = 0;
-	if (Handle != nullptr && Handle) {
+	if (Handle != INVALID_HANDLE_VALUE && Handle) {
 		nRet = WriteFile(Handle, UnShellNewFile, Size, &dwWrite, NULL);
 		CloseHandle(Handle);
 	}

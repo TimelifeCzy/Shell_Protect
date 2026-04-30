@@ -17,8 +17,8 @@ public:
 		m_MasterFilePath = csFilePath.GetString();
 		return this->InitStuData(dwOEP);
 	}
-	void puLoadLibraryStud(){ this->LoadLibraryStud(); }
-	void puRepairReloCationStud(){ this->RepairReloCationStud(); }
+	BOOL puLoadLibraryStud(){ return this->LoadLibraryStud(); }
+	BOOL puRepairReloCationStud(){ return this->RepairReloCationStud(); }
 	BOOL puCopyStud(){ return this->CopyStud(); }
 	void puClearStuData();
 

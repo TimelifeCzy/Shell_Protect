@@ -16,21 +16,21 @@ public:
 	~AddSection();
 
 public:
-	void puInti(CString sFilePath) {
+	BOOL puInti(CString sFilePath) {
 		m_FilePath = sFilePath;
-		this->Init();
+		return this->Init();
 	}
 
-	void puFree() {
+	BOOL puFree() {
 		m_FilePath.Empty();
-		this->Free();
+		return this->Free();
 	}
 
-	void puModifySectioNumber(){ this->ModifySectionNumber(); }
+	BOOL puModifySectioNumber(){ return this->ModifySectionNumber(); }
 
-	void puModifyProgramEntryPoint(){ this->ModifyProgramEntryPoint(); }
+	BOOL puModifyProgramEntryPoint(){ return this->ModifyProgramEntryPoint(); }
 
-	void puModifySizeofImage(){ this->ModifySizeofImage(); }
+	BOOL puModifySizeofImage(){ return this->ModifySizeofImage(); }
 
 	BOOL puModifySectionInfo(BYTE* Name, const DWORD & size){ return this->ModifySectionInfo(Name, size); }
 

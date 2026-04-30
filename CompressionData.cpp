@@ -10,6 +10,15 @@
 
 #define NEWSECITONNAME ".VMP"
 
+namespace {
+DWORD AlignValue(DWORD value, DWORD alignment)
+{
+	if (alignment == 0)
+		return value;
+	return ((value + alignment - 1) / alignment) * alignment;
+}
+}
+
 FILE*			fpVmFile = NULL;
 // CombatShell Export
 _Stud*			g_stu = nullptr;
@@ -24,6 +33,10 @@ CompressionData::CompressionData()
 
 CompressionData::~CompressionData()
 {
+	if (m_studBase) {
+		FreeLibrary((HMODULE)m_studBase);
+		m_studBase = nullptr;
+	}
 	if (m_lpBase) {
 		m_lpBase = nullptr;
 	}
@@ -32,6 +45,10 @@ CompressionData::~CompressionData()
 	}
 	// clear
 	SinglePuPEInfo::instance()->puClearPeData();
+	g_stu = nullptr;
+	g_Vm = nullptr;
+	g_dataHlpers = nullptr;
+	g_dataoffset = 0;
 }
 
 VOID CompressionData::ReFileInit()
@@ -44,10 +61,12 @@ VOID CompressionData::ReFileInit()
 	}
 	SinglePuPEInfo::instance()->puClearPeData();
 
-	SinglePuPEInfo::instance()->puOpenFileLoadEx(m_MasterStaticTextStr);
+	if (!SinglePuPEInfo::instance()->puOpenFileLoadEx(m_MasterStaticTextStr))
+		return;
 	m_lpBase = SinglePuPEInfo::instance()->puGetImageBase();
 	m_SectionHeadre = SinglePuPEInfo::instance()->puGetSection();
-	m_SectionCount = ((PIMAGE_NT_HEADERS)(SinglePuPEInfo::instance()->puGetNtHeadre()))->FileHeader.NumberOfSections;
+	PIMAGE_NT_HEADERS pNt = (PIMAGE_NT_HEADERS)(SinglePuPEInfo::instance()->puGetNtHeadre());
+	m_SectionCount = pNt ? pNt->FileHeader.NumberOfSections : 0;
 	m_hFile = SinglePuPEInfo::instance()->puFileHandle();
 	m_hFileSize = SinglePuPEInfo::instance()->puFileSize();
 }
@@ -94,17 +113,25 @@ void CompressionData::VmcodeEntry(char* TargetCode, _Out_ int &CodeLength)
 }
 
 // 添加区段给压缩后的数据使用
-void CompressionData::AddCompreDataSection(const DWORD & size)
+BOOL CompressionData::AddCompreDataSection(const DWORD & size)
 {
 	BYTE Name[] = ".UPX";
 	DWORD Compresdata = size;
 
-	SingleAddSection::instance()->puInti(m_MasterStaticTextStr);
-	SingleAddSection::instance()->puModifySectioNumber();
-	SingleAddSection::instance()->puModifySectionInfo(Name, Compresdata);
-	SingleAddSection::instance()->puModifySizeofImage();
-	SingleAddSection::instance()->puAddNewSectionByData(Compresdata);
+	if (!SingleAddSection::instance()->puInti(m_MasterStaticTextStr)) {
+		SingleAddSection::instance()->puFree();
+		return FALSE;
+	}
+	if (!SingleAddSection::instance()->puModifySectioNumber() ||
+		!SingleAddSection::instance()->puModifySectionInfo(Name, Compresdata) ||
+		!SingleAddSection::instance()->puModifySizeofImage() ||
+		!SingleAddSection::instance()->puAddNewSectionByData(Compresdata))
+	{
+		SingleAddSection::instance()->puFree();
+		return FALSE;
+	}
 	SingleAddSection::instance()->puFree();
+	return TRUE;
 }
 
 BOOL CompressionData::EncryptionSectionData(
@@ -168,43 +195,49 @@ BOOL CompressionData::CompressSectionData()
 	if (!pNt)
 		return false;
 
-	DWORD dSectionCount = pNt->FileHeader.NumberOfSections;
-	PIMAGE_SECTION_HEADER psection = (PIMAGE_SECTION_HEADER)m_SectionHeadre;
+	const DWORD dSectionCount = pNt->FileHeader.NumberOfSections;
+	if (dSectionCount < 2)
+		return false;
+	const DWORD originalSectionCount = dSectionCount - 1;
 	m_maskAddress = SinglePuPEInfo::instance()->puGetSectionAddress((char *)m_lpBase, (BYTE *)NEWSECITONNAME);
 	if (!m_maskAddress) {
 		AfxMessageBox(L".VMP 区别识别失败!\n");
 		return false;
 	}
 
-	// 避免如.textbss无数据
-	for (DWORD i = 0; i < dSectionCount; ++i)
+	const DWORD fileAlignment = pNt->OptionalHeader.FileAlignment;
+	const DWORD pStandardHeadersize = pNt->OptionalHeader.SizeOfHeaders;
+
+	DWORD saveBufferSize = 0;
+	PIMAGE_SECTION_HEADER pCalcSections = (PIMAGE_SECTION_HEADER)m_SectionHeadre;
+	for (DWORD i = 0; i < originalSectionCount; ++i, ++pCalcSections)
 	{
-		if (psection->PointerToRawData != 0)
-			break;
-		++psection;
+		if (pCalcSections->SizeOfRawData == 0)
+			continue;
+#ifdef _WIN64
+		saveBufferSize += pCalcSections->SizeOfRawData + 400;
+#else
+		saveBufferSize += LZ4_compressBound(pCalcSections->SizeOfRawData);
+#endif
 	}
 
-	// pe标准大小对齐后（加载基址 + .text->pointertorawdata的数据）= 大小
-	DWORD pStandardHeadersize = psection->PointerToRawData;
-
-	char* SaveCompressData = (char*)malloc(m_hFileSize);
+	char* SaveCompressData = (char*)malloc(max(saveBufferSize, 1U));
 	if (!SaveCompressData)
 		return false;
-	memset(SaveCompressData, 0, m_hFileSize);
+	memset(SaveCompressData, 0, max(saveBufferSize, 1U));
 
 	PIMAGE_SECTION_HEADER pSections = (PIMAGE_SECTION_HEADER)m_SectionHeadre;
 	DWORD ComressTotalSize = 0;
 
 	// 注意修复-改为程序Name_FileData.txt - 保存本地数据记录，脱壳使用.
-	if ((fpFile = fopen(g_CombatShellDataLocalFile, "wb+")) == NULL) 
+	if ((fpFile = fopen(g_CombatShellDataLocalFile, "wb+")) == NULL)
 	{
 		AfxMessageBox(L"CombatShell 打开创建失败.");
 		return false;
 	}
 	// 不压缩新增的区段（加壳区段）
-	for (DWORD i = 0; i < dSectionCount - 2; ++i)
+	for (DWORD i = 0; i < originalSectionCount; ++i)
 	{
-		DWORD DataSize = pSections->SizeOfRawData;
 		if (pSections->SizeOfRawData == 0)
 		{
 			fwrite(&pSections->SizeOfRawData, sizeof(DWORD), 1, fpFile);
@@ -218,6 +251,9 @@ BOOL CompressionData::CompressSectionData()
 		void* DataAddress = (void *)(pSections->PointerToRawData + (DWORD64)m_lpBase);
 #ifdef _WIN64
 		qlz_state_compress *state_compress = (qlz_state_compress *)malloc(sizeof(qlz_state_compress));
+		if (!state_compress)
+			return false;
+		memset(state_compress, 0, sizeof(qlz_state_compress));
 
 		// 计算安全缓冲区
 		//const int blen = LZ4_compressBound(pSections->SizeOfRawData + 1);
@@ -228,13 +264,19 @@ BOOL CompressionData::CompressSectionData()
 		if ((buf = (char*)malloc(sizeof(char) * blen)) == NULL)
 		{
 			AfxMessageBox(L"no enough memory!\n");
-			return -1;
+			if (fpFile) {
+				fclose(fpFile);
+				fpFile = nullptr;
+			}
+			free(SaveCompressData);
+			return FALSE;
 		}
 
 		/* 压缩 */
 		// const int dwCompressionSize = LZ4_compress_default((char*)DataAddress, buf, pSections->SizeOfRawData, blen);
-		const int dwCompressionSize = qlz_compress((char*)DataAddress, buf, blen, state_compress);
-#else 
+		const int dwCompressionSize = (int)qlz_compress((char*)DataAddress, buf, pSections->SizeOfRawData, state_compress);
+		free(state_compress);
+#else
 		DWORD blen;
 
 		// 计算安全缓冲区
@@ -244,7 +286,12 @@ BOOL CompressionData::CompressSectionData()
 		if ((buf = (char*)malloc(sizeof(char) * blen)) == NULL)
 		{
 			AfxMessageBox(L"no enough memory!\n");
-			return -1;
+			if (fpFile) {
+				fclose(fpFile);
+				fpFile = nullptr;
+			}
+			free(SaveCompressData);
+			return FALSE;
 		}
 
 		DWORD dwCompressionSize = 0;
@@ -253,6 +300,21 @@ BOOL CompressionData::CompressSectionData()
 		dwCompressionSize = LZ4_compress_default((char*)DataAddress, buf, pSections->SizeOfRawData, blen);
 
 #endif
+		if (dwCompressionSize <= 0 || (ComressTotalSize + dwCompressionSize) > saveBufferSize)
+		{
+			if (buf) {
+				free(buf);
+				buf = nullptr;
+			}
+			if (fpFile) {
+				fclose(fpFile);
+				fpFile = nullptr;
+			}
+			if (SaveCompressData) {
+				free(SaveCompressData);
+			}
+			return FALSE;
+		}
 		fwrite(&dwCompressionSize, sizeof(DWORD), 1, fpFile);
 		fflush(fpFile);
 
@@ -277,28 +339,24 @@ BOOL CompressionData::CompressSectionData()
 	if (fpFile)
 		fclose(fpFile);
 
-	// 数据对齐 0x400 + (压缩后的大小 / 0x200 + ----压缩后的大小 % 0x200 ? 1 : 0) 0x200;
-	DWORD Size = 0;
-	if (ComressTotalSize % 0x200 == 0)
-	{
-		Size = pStandardHeadersize + ((ComressTotalSize / 0x200) * 0x200);
-		int a = 10;
-	}
-	else
-	{
-		Size = pStandardHeadersize + (((ComressTotalSize / 0x200) + 1) * 0x200);
-		int a = 10;
-	}
-
+	const DWORD upxRawSize = AlignValue(ComressTotalSize, fileAlignment);
+	const DWORD Size = pStandardHeadersize + upxRawSize;
 
 	// 创建一个新区段
-	DWORD ModifySize = Size - 0x400;
-	AddCompreDataSection(ModifySize);
+	if (!AddCompreDataSection(upxRawSize))
+	{
+		free(SaveCompressData);
+		return FALSE;
+	}
 
-	// 重载文件 - 修改新区段的信息数据 文件偏移 0x400  大小 压缩后数据对齐大小
+	// 重载文件 - 修改新区段的信息数据 文件偏移为 PE 头大小，大小为压缩数据对齐后大小
 	ReFileInit();
+	m_maskAddress = SinglePuPEInfo::instance()->puGetSectionAddress((char*)m_lpBase, (BYTE*)NEWSECITONNAME);
+	if (!m_maskAddress)
+		return false;
 	BYTE byteName[] = ".UPX";
-	SinglePuPEInfo::instance()->puSetFileoffsetAndFileSize(m_lpBase, 0x400, ModifySize, byteName);
+	if (!SinglePuPEInfo::instance()->puSetFileoffsetAndFileSize(m_lpBase, pStandardHeadersize, upxRawSize, byteName))
+		return false;
 	BYTE byteNmase[] = ".UPX";
 	PIMAGE_SECTION_HEADER compSectionAddress = SinglePuPEInfo::instance()->puGetSectionAddress((char*)m_lpBase, byteNmase);
 	if (!compSectionAddress)
@@ -309,9 +367,9 @@ BOOL CompressionData::CompressSectionData()
 
 	// 拷贝压缩后的数据(对齐) --> 新加的区段
 #ifdef  _WIN64
-	memcpy((PVOID64)(compSectionAddress->PointerToRawData + (DWORD64)m_lpBase), SaveCompressData, ModifySize);
+	memcpy((PVOID64)(compSectionAddress->PointerToRawData + (DWORD64)m_lpBase), SaveCompressData, ComressTotalSize);
 #else
-	memcpy((void*)(compSectionAddress->PointerToRawData + (DWORD)m_lpBase), SaveCompressData, ModifySize);
+	memcpy((void*)(compSectionAddress->PointerToRawData + (DWORD)m_lpBase), SaveCompressData, ComressTotalSize);
 #endif //  _WIN64
 	if (SaveCompressData) {
 		free(SaveCompressData);
@@ -325,7 +383,7 @@ BOOL CompressionData::CompressSectionData()
 	memset(ComressNewBase, 0, (Size + m_maskAddress->SizeOfRawData));
 	memcpy(ComressNewBase, m_lpBase, pStandardHeadersize);
 
-	
+
 #ifdef _WIN64
 	// 拼接压缩后的全部区段(第一个头信息)
 	memcpy(&ComressNewBase[pStandardHeadersize], (PVOID64)(compSectionAddress->PointerToRawData + (DWORD64)m_lpBase), ComressTotalSize);
@@ -337,7 +395,11 @@ BOOL CompressionData::CompressSectionData()
 #endif // _WIN64
 
 	// 清空数据目录表(收尾工作)
-	CleanDirectData(ComressNewBase, ComressTotalSize, Size);
+	if (!CleanDirectData(ComressNewBase, ComressTotalSize, Size))
+	{
+		free(ComressNewBase);
+		return FALSE;
+	}
 
 	// Create File
 	std::wstring wsTagetDirectory = L"";
@@ -350,7 +412,11 @@ BOOL CompressionData::CompressSectionData()
 	}
 	const std::wstring wsMaskCompre = (wsTagetDirectory + L"CompressionMask.exe").c_str();
 	HANDLE HandComprele = CreateFile(wsMaskCompre.c_str(), GENERIC_READ | GENERIC_WRITE, FALSE, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-	
+	if (HandComprele == INVALID_HANDLE_VALUE || !HandComprele) {
+		free(ComressNewBase);
+		return FALSE;
+	}
+
 	// Write 写入压缩
 	DWORD dwWrite = 0;
 	int nRet = WriteFile(HandComprele, ComressNewBase, (Size + m_maskAddress->SizeOfRawData), &dwWrite, NULL);
@@ -432,5 +498,5 @@ BOOL CompressionData::CleanDirectData(const char* NewAddress, const DWORD & Comp
 	pSection->PointerToRawData = Size;
 	if (fpFile)
 		fclose(fpFile);
-	return 0;
+	return TRUE;
 }

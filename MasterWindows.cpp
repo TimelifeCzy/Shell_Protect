@@ -89,10 +89,11 @@ BOOL MasterWindows::NewSection()
 	CodeTool::CGetCurrentDirectory(sDriectory);
 	if (!sDriectory.empty()) {
 		const std::string sStuFile = (sDriectory + "CombatShell.dll").c_str();
-		const HANDLE hFile = CreateFileA(sStuFile.c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
+		const HANDLE hFile = CreateFileA(sStuFile.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
 			NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-		if ((hFile != NULL) && hFile) {
-			SectionSize = GetFileSize(hFile, &SectionSize);
+		if (hFile != INVALID_HANDLE_VALUE && hFile) {
+			DWORD dwHighSize = 0;
+			SectionSize = GetFileSize(hFile, &dwHighSize);
 			CloseHandle(hFile);
 		}
 		if (SectionSize <= 0)
@@ -101,16 +102,28 @@ BOOL MasterWindows::NewSection()
 	else
 		return false;
 
-	SingleAddSection::instance()->puInti(m_MasterStaticTextStr);
+	if (!SingleAddSection::instance()->puInti(m_MasterStaticTextStr)) {
+		SingleAddSection::instance()->puFree();
+		return false;
+	}
 	m_dwOldOEP = SinglePuPEInfo::instance()->puGetOEP();
-	SingleAddSection::instance()->puModifySectioNumber();
+	if (!SingleAddSection::instance()->puModifySectioNumber()) {
+		SingleAddSection::instance()->puFree();
+		return false;
+	}
 	nRet = SingleAddSection::instance()->puModifySectionInfo(Name, SectionSize);
 	if (!nRet) {
 		SingleAddSection::instance()->puFree();
 		return false;
 	}
-	SingleAddSection::instance()->puModifyProgramEntryPoint();
-	SingleAddSection::instance()->puModifySizeofImage();
+	if (!SingleAddSection::instance()->puModifyProgramEntryPoint()) {
+		SingleAddSection::instance()->puFree();
+		return false;
+	}
+	if (!SingleAddSection::instance()->puModifySizeofImage()) {
+		SingleAddSection::instance()->puFree();
+		return false;
+	}
 	nRet = SingleAddSection::instance()->puAddNewSectionByData(SectionSize);
 	SingleAddSection::instance()->puFree();
 	return nRet;
@@ -211,12 +224,13 @@ void MasterWindows::OnDropFiles(HDROP hDropInfo)
 		sDirectory = sFileName.Left(n);
 		sFileName = sFileName.Right(m);
 		
-		int nFileName = sFileName.FindOneOf(L".exe");
-		sFileName = sFileName.Left(nFileName);
+		int nFileName = sFileName.ReverseFind(L'.');
+		if (nFileName > 0)
+			sFileName = sFileName.Left(nFileName);
 		sFileName = (sDirectory + sFileName).GetString();
 
 		DWORD dwNum = 0;
-		RtlSecureZeroMemory(g_CombatShellDataLocalFile, 0);
+		RtlSecureZeroMemory(g_CombatShellDataLocalFile, sizeof(g_CombatShellDataLocalFile));
 		dwNum = WideCharToMultiByte(CP_OEMCP, NULL, sFileName, -1, NULL, NULL, 0, NULL);
 		WideCharToMultiByte(CP_OEMCP, NULL, sFileName, -1, g_CombatShellDataLocalFile, dwNum, 0, NULL);
 		if (strlen(g_CombatShellDataLocalFile) > 0) {
@@ -264,13 +278,11 @@ void MasterWindows::OnBnClickedButton1()
 	}
 
 	// 2. 压缩全部区段 压缩的时候不清空数据目录表以及区段大小（不压缩新增区段）
-	{
-		CompressionData obj_ComperData;
-		obj_ComperData.puInit(m_MasterStaticTextStr);
-		if (!obj_ComperData.puCompressSection()) {
-			AfxMessageBox(L"CompressSection failuer!");
-			return;
-		}
+	CompressionData obj_ComperData;
+	obj_ComperData.puInit(m_MasterStaticTextStr);
+	if (!obj_ComperData.puCompressSection()) {
+		AfxMessageBox(L"CompressSection failuer!");
+		return;
 	}
 
 	// 3. CombatShell 数据拷贝/操作
@@ -279,8 +291,16 @@ void MasterWindows::OnBnClickedButton1()
 		AfxMessageBox(L"studData failuer!");
 		return;
 	}
-	SingleStudData::instance()->puLoadLibraryStud();
-	SingleStudData::instance()->puRepairReloCationStud();
+	if (!SingleStudData::instance()->puLoadLibraryStud()) {
+		SingleStudData::instance()->puClearStuData();
+		AfxMessageBox(L"LoadLibraryStud failuer!");
+		return;
+	}
+	if (!SingleStudData::instance()->puRepairReloCationStud()) {
+		SingleStudData::instance()->puClearStuData();
+		AfxMessageBox(L"RepairReloCationStud failuer!");
+		return;
+	}
 	const bool bSuc = SingleStudData::instance()->puCopyStud();
 	SingleStudData::instance()->puClearStuData();
 	if (bSuc)

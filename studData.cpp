@@ -78,17 +78,25 @@ BOOL studData::LoadLibraryStud()
 	dexportAddress = GetProcAddress((HMODULE)m_studBase, "VmEntry");
 #else
 	dexportAddress = GetProcAddress((HMODULE)m_studBase, "CombatShellEntry");
+	if (!dexportAddress)
+		dexportAddress = GetProcAddress((HMODULE)m_studBase, "_CombatShellEntry@0");
 #endif
 	// ImageBase
 #ifdef _WIN64
 	m_dwStudSectionAddress64 = (DWORD64)SinglePuPEInfo::instance()->puGetSectionAddress((char *)m_studBase, (BYTE *)".text");
 	m_dwNewSectionAddress64 = (DWORD64)SinglePuPEInfo::instance()->puGetSectionAddress((char *)m_lpBase, (BYTE *)NEWSECITONNAME);
 	m_ImageBase64 = ((PIMAGE_NT_HEADERS)SinglePuPEInfo::instance()->puGetNtHeadre())->OptionalHeader.ImageBase;
+	if (!m_dwStudSectionAddress64 || !m_dwNewSectionAddress64)
+		return FALSE;
 #else
 	m_dwStudSectionAddress = (DWORD)SinglePuPEInfo::instance()->puGetSectionAddress((char *)m_studBase, (BYTE *)".text");
 	m_dwNewSectionAddress = (DWORD)SinglePuPEInfo::instance()->puGetSectionAddress((char *)m_lpBase, (BYTE *)NEWSECITONNAME);
 	m_ImageBase = ((PIMAGE_NT_HEADERS)SinglePuPEInfo::instance()->puGetNtHeadre())->OptionalHeader.ImageBase;
+	if (!m_dwStudSectionAddress || !m_dwNewSectionAddress)
+		return FALSE;
 #endif // _WIN64
+	if (!dexportAddress)
+		return FALSE;
 
 	return TRUE;
 }
@@ -111,10 +119,9 @@ BOOL studData::RepairReloCationStud()
 		WORD type : 4;
 	}Node, *PNode;
 
-#ifdef _WIN64
-	LONGLONG dwDelta = (__int64)m_studBase - m_ImageBase64;
-#endif
 	DWORD OldAttribute = 0;
+	if (!pStuRelocation)
+		return FALSE;
 	while (pStuRelocation->SizeOfBlock)
 	{
 		DWORD nStuRelocationBlockCount = (pStuRelocation->SizeOfBlock - sizeof(IMAGE_BASE_RELOCATION)) / 2;
@@ -133,11 +140,14 @@ BOOL studData::RepairReloCationStud()
 				VirtualProtect(pRel, 8, OldAttribute, &OldAttribute);
 			}
 #ifdef _WIN64
-			if (RelType->type == 10) {
+			if (RelType[i].type == 10) {
 				PULONGLONG pAddress = (PULONGLONG)((DWORD64)m_studBase + pStuRelocation->VirtualAddress + RelType[i].offset);
 				VirtualProtect(pAddress, 8, PAGE_READWRITE, &OldAttribute);
-				*pAddress += dwDelta;
-				//*pAddress = *pAddress - (DWORD64)m_studBase - ((PIMAGE_SECTION_HEADER)m_dwStudSectionAddress64)->VirtualAddress + ((PIMAGE_SECTION_HEADER)m_dwNewSectionAddress64)->VirtualAddress + m_ImageBase64;
+				*pAddress = *pAddress
+					- (DWORD64)m_studBase
+					- ((PIMAGE_SECTION_HEADER)m_dwStudSectionAddress64)->VirtualAddress
+					+ ((PIMAGE_SECTION_HEADER)m_dwNewSectionAddress64)->VirtualAddress
+					+ m_ImageBase64;
 				VirtualProtect(pAddress, 8, OldAttribute, &OldAttribute);
 			}
 
@@ -185,6 +195,7 @@ BOOL studData::CopyStud()
 	pNt->OptionalHeader.AddressOfEntryPoint = (DWORD)dexportAddress - (DWORD)m_studBase - studSection->VirtualAddress + SurceBase->VirtualAddress;
 #endif
 
+	SetFilePointer(SinglePuPEInfo::instance()->puFileHandle(), 0, NULL, FILE_BEGIN);
 	int nRet = WriteFile(SinglePuPEInfo::instance()->puFileHandle(), SinglePuPEInfo::instance()->puGetImageBase(), SinglePuPEInfo::instance()->puFileSize(), &dwRiteFile, &overLapped);
 	if (!nRet)
 		return FALSE;
@@ -197,8 +208,18 @@ void studData::puClearStuData()
 	SinglePuPEInfo::instance()->puClearPeData();
 	if (m_lpBase)
 		m_lpBase = nullptr;
-	if (m_studBase)
+	if (m_studBase) {
+		FreeLibrary((HMODULE)m_studBase);
 		m_studBase = nullptr;
+	}
+	dexportAddress = nullptr;
+	WinMain = nullptr;
+	m_dwNewSectionAddress = 0;
+	m_dwNewSectionAddress64 = 0;
+	m_dwStudSectionAddress = 0;
+	m_dwStudSectionAddress64 = 0;
 	m_OldOEP = 0;
 	m_ImageBase = 0;
+	m_ImageBase64 = 0;
+	m_MasterFilePath.Empty();
 }

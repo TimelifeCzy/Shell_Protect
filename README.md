@@ -1,52 +1,88 @@
 # Shell_Protect
 
-PE虚拟壳框架，项目意图给学习软件保护加壳的初学者提供一些思路和引导。
+PE 虚拟壳框架，项目用于学习软件保护、PE 加壳、压缩脱壳、IAT 修复和简单虚拟机保护流程。
 
 ![image](https://github.com/TimelifeCzy/Shell_Protect/blob/main/readmepng/dlg.png)
 
-支持一键加壳/脱壳，全压缩/加密，IAT加密等。
+## 功能概览
 
-1. 压缩库支持lz4/quicklz，以保证x32/x64压缩稳定。
+- 支持一键加壳和一键脱壳。
+- 支持 x32/x64，不同平台使用不同压缩库：x32 使用 LZ4，x64 使用 QuickLZ。
+- 支持压缩原始区段、清理数据目录和区段文件偏移、运行时解压并修复 IAT。
+- x64 包含简单 VM 示例，用于演示代码片段加密、指令解析、分发和上下文维护思路。
 
 ![image](https://github.com/TimelifeCzy/Shell_Protect/blob/main/readmepng/1.png)
 
-2. 一键加壳成功后, 被加壳程序同级别会生成FileName_CombatShellData.dat文件，文件本身是原PE数据，仅脱壳使用，计划是保存新增节表中，简单方便化就本地存储.
-```
-压缩节表数据 | 清理的数据目录16个) + 清理的记录节表数据 | 原始的OEP
+## 加壳流程
+
+代码入口主要参考 `MasterWindows::OnBnClickedButton1()`：
+
+1. 拖入目标 PE，`OnDropFiles()` 记录目标路径，并生成同目录的 `FileName_CombatShellData.dat` 路径。
+2. `NewSection()` 调用 `AddSection` 添加 `.VMP` 区段，用于放入壳代码。
+3. `CompressionData::CompressSectionData()` 压缩原 PE 区段数据，新增 `.UPX` 区段保存压缩数据，并记录原始数据目录、区段大小、区段偏移和 OEP。
+4. `studData::LoadLibraryStud()` 加载 `CombatShell.dll`，定位壳入口。
+5. `studData::RepairReloCationStud()` 修复壳代码重定位。
+6. `studData::CopyStud()` 将壳代码拷贝到 `.VMP`，并把入口点改到壳入口。
+7. 成功后生成加壳后的目标文件，同时保留 `old_原文件名` 作为备份。
+
+一键加壳成功后，目标文件同目录会生成：
+
+```text
+FileName_CombatShellData.dat
 ```
 
-3. 虚拟机：虚拟壳目前仅支持x64加代码片段(需要稍作修改)，这只是一个示例和思路，如何自己编写虚拟机，运行态保存上下文环境及维护堆栈。
+该文件用于脱壳恢复，内容包含压缩区段记录、被清理的数据目录、原区段文件信息和原始 OEP。当前实现为了简化流程将这些数据保存到本地文件，后续也可以扩展为写入新增区段。
 
-- 对需要加密代码段进行Vmcode，简单点说加密代码，dll中壳代码执行vmentry进入虚拟机，默认x32直接进入壳main函数未Vm。
+```text
+压缩区段大小记录 | 数据目录记录(16项) | 原区段 SizeOfRawData/PointerToRawData | 原始 OEP
+```
+
+## 运行时流程
+
+壳入口在 `CombatShell/CombatShell.cpp` 中：
+
+1. `CombatShellEntry()` 解析 `kernel32/user32` 等必要 API。
+2. `CreateWind()` 创建隐藏窗口和辅助线程。
+3. `ProcessCallBack()` 触发解压流程；窗口不可用时直接执行解压和跳转。
+4. `UnCompression()` 恢复数据目录、区段文件信息，并解压 `.UPX` 中的原始区段数据。
+5. `RepairTheIAT()` 重新加载导入模块并修复 IAT。
+6. 最后跳转到 `ImageBase + 原始 OEP` 继续执行原程序。
+
+## 脱壳流程
+
+代码入口主要参考 `MasterWindows::OnBnClickedButton2()`：
+
+1. 拖入已加壳程序。
+2. `UnShell::UnShellEx()` 读取加壳 PE 和本地 `FileName_CombatShellData.dat`。
+3. `UnShell::RepCompressionData()` 根据记录解压 `.UPX` 中的原始区段数据。
+4. `UnShell::DeleteSectionInfo()` 删除 `.VMP` 和 `.UPX` 区段信息，恢复数据目录、区段文件偏移、区段大小和 OEP。
+5. `UnShell::SaveUnShell()` 重新保存 PE，并替换当前目标文件。
+
+## VM 说明
+
+虚拟机目前主要用于 x64 代码片段保护示例，重点是展示 VM 设计思路，而不是完整商业级虚拟化保护。
+
+- 加壳时记录需要 VM 处理的代码偏移、长度和加密后的指令数据。
+- 运行时由 `VmEntry()` 进入 VM，读取加密后的代码片段并解密。
+- `VmOpcodeAnalHlper()` 解析指令语义，例如 `mov/xor/add/sub/call/jmp`。
+- `VmCodetoExecDispath()` 将解析出的指令分发到对应 handler。
+- handler 维护寄存器和栈上下文，模拟原始指令效果。
 
 ![image](https://github.com/TimelifeCzy/Shell_Protect/blob/main/readmepng/4.png)
-
-- 虚拟机读取加密的代码段进行解密，变成正常的Opcode或者直接识别Vmcode都可以，解析器负责对Vmcode进行语义分析。 如mov eax, 23h  Vmcode: xx xx xx xx 进入Vmentry读取Vmcode：xx xx xx xx，Vm虚拟机转换成(分析后)知道他是mov eax,23。
-- 解析完成之后指令分发处理，如mov类的指令分发至mov相关处理函数，mov又可以细化为不同的操作数，如mov eax/rax/rbx/imm/xxx等，处理函数再进行进一步字节码筛选匹配。
-- mov rax/rbx/rcx/r8/mm/imm等等，分别挂钩不同的handle(混淆执行器)来执行等同于mov eax,23h代码。
-
 ![image](https://github.com/TimelifeCzy/Shell_Protect/blob/main/readmepng/2.png)
-
-- 退出和进入Vmhandle时候会出现寄存器数据丢失，栈数据丢失，上下代码执行就会导致当前运行环境不完整。因为是在虚拟机中操作，**开辟对应的代码段的栈空间及寄存器环境，这里有个概念，当前代码段或者函数的栈及全局寄存器变量。如下，每次传入属于当前代码段的寄存器环境：**。
-
 ![image](https://github.com/TimelifeCzy/Shell_Protect/blob/main/readmepng/3.png)
 
-项目中的虚拟机没有高级算法，只是简单加密用来阐述过程，Vmcode分析引擎因为能力/精力有限，没有去构造Vmcode代码分析引擎，只是构造了解密后代码分析引擎挂钩handle处理。再加壳时候记录了加密汇编大小/长度/基于该代码段的起始偏移，用来做为Vmcode分析引擎使用，快速解密和处理分发。
+项目中的 VM 没有高级算法，只是用于说明 VM 指令解析、分发和上下文维护过程。`CompressionData::VmcodeEntry()` 中仍有硬编码的 VM 指令行数，后续可以通过反汇编自动分析优化。
 
-工程中有一处硬编码，void CompressionData::VmcodeEntry(), 可以做反汇编获取行数优化.
-**注意：本项目仅支持加壳器中的Main函数，只对Main汇编映射指令进行了处理，未处理其它指令。**
+**注意：当前 VM 示例只覆盖部分指令映射，不是完整指令集。**
 
-造轮子的意义在于学习理解：理解虚拟机和指令集映射，理解虚拟机结构和协同工作。
-推荐专业的虚拟机分析引擎(看雪版主玩命)： https://github.com/devilogic/cerberus.git ，加密解密书籍有配套虚拟壳代码(没有看过)，也可以参考。
+## 说明
 
-软件保护技术还可应用于免杀，当然可以扩展更深层次了解杀软检测及反检测。
+本项目仅用于学习和研究 PE 结构、软件保护、压缩壳、IAT 修复和虚拟机保护思路，不提供正式 Release 版本。
 
 ![image](https://github.com/TimelifeCzy/Shell_Protect/blob/main/readmepng/5.png)
 ![image](https://github.com/TimelifeCzy/Shell_Protect/blob/main/readmepng/6.png)
 
-项目不提供Release版本，仅用于学习和研究。
-
 ## Stargazers over time
 
 [![Stargazers over time](https://starchart.cc/TimelifeCzy/Shell_Protect.svg)](https://starchart.cc/TimelifeCzy/Shell_Protect)
-
